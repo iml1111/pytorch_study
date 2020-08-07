@@ -22,6 +22,7 @@ nbconvert==5.6.1
 nbformat==5.0.7
 numpy==1.19.1
 packaging==20.4
+pandas==1.1.0
 pandocfilters==1.4.2
 parso==0.7.1
 pickleshare==0.7.5
@@ -31,6 +32,7 @@ Pygments==2.6.1
 pyparsing==2.4.7
 pyrsistent==0.16.0
 python-dateutil==2.8.1
+pytz==2020.1
 pywin32==228
 six==1.15.0
 testpath==0.4.4

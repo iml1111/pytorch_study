@@ -4,7 +4,7 @@ from torch import nn
 import matplotlib.pyplot as plt
 
 # 데이터 준비
-data = pd.read_csv('data/02_Linear_Regression_Model_Data.csv')
+data = pd.read_csv('01_data.csv')
 # Avoid copy data, just refer
 x = torch.from_numpy(data['x'].values).unsqueeze(dim=1).float()
 y = torch.from_numpy(data['y'].values).unsqueeze(dim=1).float()
