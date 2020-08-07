@@ -11,9 +11,9 @@ class ImageClassifier(nn.Module):
         super().__init__()
 
         self.layers = nn.Sequential(
-            nn.Linear(input_size, 500),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(500),
+            nn.Linear(input_size, 500), # Dense Layer
+            nn.LeakyReLU(),             # Activation Func
+            nn.BatchNorm1d(500),        # Normalization
             
             nn.Linear(500, 400),
             nn.LeakyReLU(),

@@ -1,6 +1,5 @@
 import torch
 import torch.nn
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from model import ImageClassifier
