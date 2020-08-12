@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class Autoencoder(nn.Module):
     ''' 오토인코더 신경망 구조'''
-    def __init__(self, btl_size=5):
+    def __init__(self, btl_size=2):
         self.btl_size = btl_size
         super().__init__()
 
