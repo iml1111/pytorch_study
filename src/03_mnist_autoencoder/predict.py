@@ -6,7 +6,7 @@ import torch
 from model import Autoencoder
 
 # 연산 디바이스 결정
-#device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+# device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 device = torch.device("cpu")
 
 # 테스트 데이터 호출
