@@ -26,6 +26,10 @@ def test(model, x, y, to_be_shown=True):
 
 	with torch.no_grad():
 		pred_y = model(x)
+		print("X_size:", x.size())
+		print("pred_Y_size:", pred_y.size())
+		print("Y_Size:", y.size())
+
 		correct_cnt = (y.squeeze() == torch.argmax(pred_y, dim=-1)).sum()
 		total_cnt = float(x.size(0))
 

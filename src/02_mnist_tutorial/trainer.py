@@ -34,6 +34,10 @@ class Trainer():
         for i, (x_i, y_i) in enumerate(zip(x, y)):
             pred_y_i = self.model(x_i)
             # squeeze : (N, 1) -> (N,)로 변환
+            # print("-----")
+            # print(pred_y_i.size())
+            # print(y_i.squeeze().size())
+            # print("-----")
             loss = self.crit(pred_y_i, y_i.squeeze())
 
             # 그래디언트 초기화 및 역전파 진행

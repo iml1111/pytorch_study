@@ -55,6 +55,11 @@ for step in range(500):
     # 예측값과 실제값의 에러 값 계산
     loss = criterion(input=prediction, target=y)
 
+    # print("-----------")
+    # print(prediction.size())
+    # print(y.size())
+    # print("------------")
+
     # 옵티마이저 grad 초기화 / 매번 루프마다 해주어야 함
     optimizer.zero_grad()
     # 에러 값을 통한 역전파 개시
