@@ -29,6 +29,8 @@ def define_argparser():
     rand_init: 아키텍쳐만 같고 완전히 새로 학습 : 아무것도 안쓸떄
     pretrained: 모델 파라미터를 가져오되 모두 재학습: 프리트레인만 true
     freezed: 모델 파라미터를 가져오고 마지막 레이어를 제외한 나머지 학습 X: 둘다 true
+
+    freezed pretrain의 경우, 굉장히 빠르게 어큐러시가 수렴하게 됨
     '''
     return p.parse_args()
 
