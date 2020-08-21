@@ -16,7 +16,7 @@ def define_argparser():
     p.add_argument('--valid_ratio', type=float, default=.2)
     p.add_argument('--test_ratio', type=float, default=.2)
 
-    p.add_argument('--batch_size', type=int, default=256)
+    p.add_argument('--batch_size', type=int, default=128)
     p.add_argument('--n_epochs', type=int, default=20)
     p.add_argument('--verbose', type=int, default=2)
 
@@ -62,6 +62,20 @@ def main(config):
 
     trainer = Trainer(config)
     trainer.train(model, crit, optimizer, train_loader, valid_loader)
+
+    '''
+    # use_pretrained / freeze
+    Epoch 20 - |param|=8.80e+01 |g_param|=4.59e-01 loss=9.8717e-02 accuracy=0.9552
+    Validation - loss=9.3166e-02 accuracy=0.9645 best_loss=8.3037e-02
+    
+    # only pretrained
+    Epoch 20 - |param|=1.26e+02 |g_param|=5.50e-01 loss=1.1496e-01 accuracy=0.9497
+    Validation - loss=1.5151e-01 accuracy=0.9366 best_loss=1.5098e-01
+
+    # rand init
+    Epoch 20 - |param|=1.66e+02 |g_param|=1.01e+00 loss=2.8314e-01 accuracy=0.8696
+    Validation - loss=2.9703e-01 accuracy=0.8676 best_loss=2.8204e-01
+    '''
 
 
 if __name__ == '__main__':

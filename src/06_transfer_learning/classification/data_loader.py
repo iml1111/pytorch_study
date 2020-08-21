@@ -19,6 +19,8 @@ def load_dataset(
 
 
 def get_loader(config, input_size):
+    # https://green-late7.tistory.com/56
+    # 데이터 정제 관련 메소드들
     data_transforms = {
         'train': transforms.Compose([
             transforms.RandomResizedCrop(input_size),

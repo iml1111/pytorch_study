@@ -30,6 +30,7 @@ class IgniteEngine(Engine):
         engine.model.train()
         engine.optimizer.zero_grad()
         x, y = mini_batch
+
         # 학습하는 중간에 데이터를 GPU로 전송해줌
         x, y = x.to(engine.device), y.to(engine.device)
 
