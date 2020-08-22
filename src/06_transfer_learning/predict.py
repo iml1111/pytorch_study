@@ -13,7 +13,7 @@ config = {
     "train_ratio":.6,
     "valid_ratio":.2,
     "test_ratio":.2,
-    'batch_size':128
+    'batch_size':10
 }
 config = Namespace(**config)
 
@@ -31,7 +31,14 @@ def load(fn, device):
 
 
 def plot(x, pred_y):
-    pass
+    for i in range(x.size(0)):
+        img = (np.array(x[i].detach().cpu(), dtype='float')).transpose((1,2,0))
+        plt.imshow(img, cmap='gray')
+        if float(torch.argmax(pred_y[i], dim=-1)):
+            print("Predict: Dog!")
+        else:
+            print("Predict: Cat!")
+        plt.show()
 
 
 def test(model, x, y, to_be_shown=True):
@@ -53,7 +60,9 @@ def main():
     model.load_state_dict(state_dict)
 
     _, _, test_loader = get_loader(config, input_size)
-    print(test_loader)
+    for x, y in test_loader:
+        test(model, x, y, to_be_shown=True)
+        break
 
 
 if __name__ == '__main__':
