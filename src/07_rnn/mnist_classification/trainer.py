@@ -1,6 +1,7 @@
 from copy import deepcopy
 import numpy as np
 import torch
+import torch.nn.utils as torch_utils
 from ignite.engine import Engine
 from ignite.engine import Events
 from ignite.metrics import RunningAverage
@@ -53,6 +54,14 @@ class IgniteEngine(Engine):
         # 적었다 커졌다 날뛰거나, Nan으로 Loss 자체가 날라가서 학습이 실패할수도 있음
         # 즉, 학습의 안정성을 보장함
         g_norm = float(get_grad_norm(engine.model.parameters()))
+
+        # 그래디언트 클리핑 (스텝 전에 해줘야함)
+        if engine.config.max_grad > 0:
+            torch_utils.clip_grad_norm_(
+                engine.model.parameters(),
+                engine.config.max_grad,
+                norm_type=2,
+            )
 
         engine.optimizer.step()
 
