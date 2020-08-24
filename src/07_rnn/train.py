@@ -28,7 +28,8 @@ def define_argparser():
     p.add_argument('--n_layers', type=int, default=4)
     p.add_argument('--dropout_p', type=float, default=.2)
 
-    # ???
+    # 그래디언트 클리핑 처리
+    # 해당 max_grad를 넘지 못함
     p.add_argument('--max_grad', type=float, default=-1)
     return p.parse_args()
 
