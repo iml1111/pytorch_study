@@ -43,7 +43,7 @@ def get_model(config):
         model = SequenceClassifier(
             input_size=28,
             hidden_size=config.hidden_size,
-            output_size=28,
+            output_size=10,
             n_layers=config.n_layers,
             dropout_p=config.dropout_p,
         )
