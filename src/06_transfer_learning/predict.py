@@ -34,6 +34,7 @@ def plot(x, pred_y):
     for i in range(x.size(0)):
         img = (np.array(x[i].detach().cpu(), dtype='float')).transpose((1,2,0))
         plt.imshow(img, cmap='gray')
+        print(pred_y[i])
         if float(torch.argmax(pred_y[i], dim=-1)):
             print("Predict: Dog!")
         else:
