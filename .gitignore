@@ -12,6 +12,8 @@ data/
 *.jpg
 *.gif
 *.jpeg
+review.sorted.uniq.tsv
+review.sorted.uniq.*.tsv
 # Distribution / packaging
 .Python
 build/
