@@ -1,3 +1,7 @@
+'''
+refine.txt에 전처리 패턴 셋이 준비되어 있음.
+사전에 변환, 제거해야 하는 문자를 미리 txt 파일로 등록해두자
+'''
 import sys
 import re
 
