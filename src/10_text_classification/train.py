@@ -23,7 +23,7 @@ def define_argparser():
     p.add_argument('--min_vocab_freq', type=int, default=3)
     p.add_argument('--max_vocab_size', type=int, default=999999)
 
-    p.add_argument('--batch_size', type=int, default=64)
+    p.add_argument('--batch_size', type=int, default=128)
     p.add_argument('--n_epochs', type=int, default=10)
 
     p.add_argument('--word_vec_size', type=int, default=256)

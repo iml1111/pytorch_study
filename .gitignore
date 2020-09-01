@@ -137,3 +137,4 @@ dmypy.json
 .pyre/
 src/.DS_Store
 .DS_Store
+src/10_text_classification/test.txt

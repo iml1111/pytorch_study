@@ -32,6 +32,10 @@ class IgniteEngine(Engine):
         x, y = x.to(engine.device), y.to(engine.device)
 
         # 각 문장을 최대 제한 단어 수만큼 자름
+        # 여기서 중요한 점은 각 미니 배치마다, length가 다를 것이라는 점
+        # 미니 배치 내에 존재하는 모든 문장의 length는 같음
+        # 문장마다 length 차이가 있을 경우, pad를 덮는 듯함
+        # x = (batch_size, length)
         x = x[:, :engine.config.max_length]
 
         pred_y = engine.model(x)

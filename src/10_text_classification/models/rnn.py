@@ -57,10 +57,11 @@ class RNNClassifier(nn.Module):
 
         # z = (batch_size, length, hidden_size * 2) > bi-RNN이므로 2배
         z, _ = self.rnn(embed_x)
-
-        # sliced_z = (batch_size, 1, hidden_size * 2) > 마지막 time-step만 체크
+        
+        # z[:, -1] = (batch_size, hidden_size * 2) > 마지막 time-step만 보존
+        # sliced_z = (batch_size, n_classes) 
         sliced_z = self.generator(z[:, -1])
-        # print(sliced_z.size())
+        
         # y = (batch_size, n_classes)
         y = self.activation(sliced_z)
         return y

@@ -99,8 +99,11 @@ class CNNClassifier(nn.Module):
         # 3개의 신경망에서 나온 값을 그대로 이어붙임
         # cnn_outs = (batch_size, sum(n_filters))
         cnn_outs = torch.cat(cnn_outs, dim=-1)
-
+        
+        # z = (batch_size, n_classes)
+        z = self.generator(cnn_outs)
+        
         # y = (batch_size, n_classes)
-        y = self.activation(self.generator(cnn_outs))
+        y = self.activation(z)
         return y
 
