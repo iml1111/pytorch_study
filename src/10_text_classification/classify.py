@@ -4,7 +4,8 @@ import torch
 from torchtext import data
 from models.rnn import RNNClassifier
 from models.cnn import CNNClassifier
-
+sys.stdin.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')
 
 def define_argparser():
     p = argparse.ArgumentParser()
