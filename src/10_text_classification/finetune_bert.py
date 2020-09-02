@@ -1,3 +1,4 @@
+print("This is BERT Train")
 import argparse
 import random
 import torch
