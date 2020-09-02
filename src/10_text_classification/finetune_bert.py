@@ -94,21 +94,17 @@ def get_loaders(fn, tokenizer):
 
 
 def main(config):
-    print(1)
-    print(config.gpu_id)
     if config.gpu_id < 0:
         print("Device: CPU")
     else:
-        print("asd")
-       #  print("Device:", torch.cuda.get_device_name(config.gpu_id))
-    print(2)
+        print("Device:", torch.cuda.get_device_name(config.gpu_id))
+
     # Get pretrained tokenizer.
     tokenizer = AutoTokenizer.from_pretrained(config.pretrained_model_name)
-    print(2.5)
-    print(tokenizer)
+
     # Get dataloaders using tokenizer from untokenized corpus.
-    train_loader, valid_loader, index_to_label = get_loaders('./review.sorted.uniq.refined.tok.shuf.train.tsv', tokenizer)
-    print(3)
+    train_loader, valid_loader, index_to_label = get_loaders(config.train_fn, tokenizer)
+
     print(
         '|train| =', len(train_loader) * config.batch_size,
         '|valid| =', len(valid_loader) * config.batch_size,
@@ -182,7 +178,5 @@ def main(config):
 
 
 if __name__ == '__main__':
-    print("This is BERT Train")
     config = define_argparser()
-    print("Ready")
     main(config)
