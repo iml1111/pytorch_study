@@ -1,19 +1,15 @@
-print("This is BERT Train")
 import argparse
 import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-print("This is BERT Train")
 from transformers import AutoTokenizer
 from transformers import BertForSequenceClassification
 from transformers import get_linear_schedule_with_warmup
-print("This is BERT Train")
 import torch_optimizer as custom_optim
 from module.bert_trainer import BertTrainer as Trainer
 from module.data_loader import BertDataset, TokenizerWrapper
-print("This is BERT Train")
 
 def define_argparser():
     p = argparse.ArgumentParser()
@@ -181,5 +177,6 @@ def main(config):
 
 
 if __name__ == '__main__':
+    print("This is BERT Train")
     config = define_argparser()
     main(config)
