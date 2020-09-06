@@ -13,27 +13,27 @@ class CancerClassifier(nn.Module):
         self.layers = nn.Sequential(
             nn.Linear(input_size, 22),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(22),
+            #nn.BatchNorm1d(22),
 
             nn.Linear(22, 15),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(15),
+            #nn.BatchNorm1d(15),
             
             nn.Linear(15, 10),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(10),
+            #nn.BatchNorm1d(10),
 
             nn.Linear(10, 5),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(5),
+           #nn.BatchNorm1d(5),
             
             nn.Linear(5, 4),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(4),
+            #nn.BatchNorm1d(4),
             
             nn.Linear(4, 3),
             nn.LeakyReLU(),
-            nn.BatchNorm1d(3),
+            #nn.BatchNorm1d(3),
             
             nn.Linear(3, output_size),
             nn.Sigmoid(),
