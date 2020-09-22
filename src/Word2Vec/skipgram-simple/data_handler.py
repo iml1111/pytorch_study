@@ -14,8 +14,8 @@ split_ind = (int)(len(text) * 0.8)
 
 # By deriving a set from `raw_text`, we deduplicate the array
 vocab = set(text)
-# vocab_size = len(vocab)
-# print('vocab_size:', vocab_size)
+vocab_size = len(vocab)
+
 
 w2i = {w: i for i, w in enumerate(vocab)}
 i2w = {i: w for i, w in enumerate(vocab)}
