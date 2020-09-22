@@ -5,6 +5,7 @@ __pycache__/
 
 data/
 *.pth
+model_test.txt
 
 # C extensions
 *.so

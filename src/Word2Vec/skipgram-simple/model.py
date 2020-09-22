@@ -20,6 +20,8 @@ class SkipGram(nn.Module):
         # 두 단어간의 내적값이 score 
         # 같을수록 1에 가까워지고
         # 다를수록 0에 가까워짐
+
+        # 결과적으로 두 단어 임베딩간의 유사도를 예측함
         score = torch.mm(embed_focus, torch.t(embed_ctx))
         log_probs = F.logsigmoid(score)
     

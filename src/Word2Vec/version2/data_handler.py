@@ -43,18 +43,18 @@ class DataHanlder:
         self.read_data_method = read_data_method
         
         print('read dataset...')
-        self.vocab, self.word2id, self, id2word, self.total_word_count, self.sentence_len = self.gen_vocab()
+        self.vocab, self.word2id, self.id2word, self.total_word_count, self.sentence_len = self.gen_vocab()
         print(f'got vocab {len(self.vocab)}, total_word_count {self.total_word_count}')
         
         print('gen sub sample table...')
-        self.sub_sampling_table = self.get_subsample_table()
+        self.sub_sampling_table = self.gen_subsample_table()
         
         print('gen negative sample table...')
         self.neg_sampling_table = self.gen_negative_sample_table()
 
 
         # for generating batch
-        self.sentences_cursor = 0 
+        self.sentence_cursor = 0 
         
         self.batch_size = batch_size
         self.neg_sample_count = neg_sample_count
@@ -135,3 +135,84 @@ class DataHanlder:
         pow_total_freq = sum(pow_freq)
         r = pow_freq / pow_total_freq
         count = np.round(r * sample_tbl_size)
+        for item_id, _count in enumerate(count):
+            sample_tbl += [item_id] * int(_count)
+        sample_tbl = np.array(sample_tbl)
+        return sample_tbl
+
+    def gen_batch(self):
+        '''
+        yield batch
+        :return: pos_pairs -> [(w1, w2) * batch_size ], neg samples -> [self.neg_sample_count * batch_size]
+        '''
+        f = open(self.log_filename)
+        pos_pairs = []
+        pos_1, pos_2, neg_samples = [], [], []
+
+        while True:
+            while len(pos_pairs) < self.batch_size:
+                # pos
+                sentence = []
+                if self.read_data_method == 'memory':
+                    sentence = self.sentences.popleft()
+                elif self.read_data_method == 'file':
+                    sentence = f.readline()
+                    if not sentence:
+                        f = open(self.log_filename)
+                        sentence = f.readline()
+                    sentence = sentence.strip().split()
+                self.sentence_cursor += 1
+
+                # to word id
+                word_ids = [self.word2id[item_id] for item_id in sentence if item_id in self.word2id]
+                for i, word_id in enumerate(word_ids):
+                    pos_pairs += [(word_id, word_ids[j])
+                                  for j in range(max(0, i - self.half_window_size),
+                                                 min(i + self.half_window_size + 1, len(word_ids) - 1))
+                                  if j != i]
+                if self.read_data_method == 'memory':
+                    self.sentences.append(sentence)
+
+            # neg
+            for pos1, pos2 in pos_pairs[len(neg_samples):]:
+                pos_1.append(pos1)
+                pos_2.append(pos2)
+                neg_samples.append(self.negative_sampling(pos1, pos2))
+            
+            yield (pos_1[:self.batch_size], pos_2[:self.batch_size], neg_samples[:self.batch_size])
+            pos_pairs = pos_pairs[self.batch_size:]
+            pos_1 = pos_1[self.batch_size:]
+            pos_2 = pos_2[self.batch_size:]
+            neg_samples = neg_samples[self.batch_size:]
+
+    def negative_sampling(self, pos1, pos2):
+        """
+        negative sample, shall not equal to pos1 and pos2
+        :param pos1:
+        :param pos2:
+        :return:
+        """
+        negs = []
+        while len(negs) < self.neg_sample_count:
+            _negs = np.random.choice(self.neg_sampling_table, size=self.neg_sample_count - len(negs))
+            negs += [i for i in _negs if i != pos1 and i != pos2]
+        return negs[:self.neg_sample_count]
+
+
+def test():
+    handler = DataHanlder('../../data/trainset.txt', read_data_method='memory')
+    i = 0
+    import time
+    start = time.time()
+    for pos_1, pos_2, neg_samples in handler.gen_batch():
+        if handler.sentence_cursor >= 2 * handler.total_word_count:
+            break
+        i += 1
+        if i > 1000:
+            break
+    end = time.time()
+    print('1000 iter using', end - start)
+
+
+if __name__ == '__main__':
+    test()

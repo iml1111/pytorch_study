@@ -6,10 +6,10 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 
-class Word2Vec(nn.Module):
+class SkipGramModel(nn.Module):
     '''Word2Vec Skip-Gram model 신경망 클래스'''
     def __init__(self, emb_size, emb_dimension):
-        super(Word2Vec, self).__init__()
+        super(SkipGramModel, self).__init__()
         self.emb_size = emb_size
         self.emb_dimension = emb_dimension
         self.u_embeddings = nn.Embedding(emb_size, emb_dimension, sparse=True)
@@ -36,10 +36,11 @@ class Word2Vec(nn.Module):
         :param pos_v:  positive pairs v, list
         :param neg_v:  negative pairs v, list
         :return:
+
+        pos_u: batch_size * 중심단어
+        pos_v: batch_size * 주변단어
+        neg_v: 5 * batch_size * 거짓된 주변단어
         """
-        print("pos_u:", pos_u)
-        print("pos_v:", pos_v)
-        print("pos_v:", neg_v)
         emb_u = self.u_embeddings(pos_u)
         emb_v = self.v_embeddings(pos_v)
 
@@ -53,9 +54,20 @@ class Word2Vec(nn.Module):
 
         return -1 * (torch.sum(score) + torch.sum(neg_score))
 
-    def save_embedding(self, id2word):
-        embedding = self.u_embeddings.weight.data.numpy()
-        fout = open("test_model", 'w')
+    def save_embedding(self, id2word: dict, file_name: str='word_vectors.txt', use_cuda: bool=False):
+        """
+        Save all embeddings to file.
+        As this class only record word id, so the map from id to word has to be transfered from outside.
+        :param id2word: map from word id to word.
+        :param file_name: file name.
+        :param use_cuda:
+        :return:
+        """
+        if use_cuda:
+            embedding = self.u_embeddings.weight.cpu().data.numpy()
+        else:
+            embedding = self.u_embeddings.weight.data.numpy()
+        fout = open(file_name, 'w', encoding='utf-8')
         fout.write('%d %d\n' % (len(id2word), self.emb_dimension))
         for wid, w in id2word.items():
             e = embedding[wid]
@@ -64,7 +76,7 @@ class Word2Vec(nn.Module):
 
 def test():
     vocab_size, embed_size = 100, 100
-    model = Word2Vec(vocab_size, embed_size)
+    model = SkipGramModel(vocab_size, embed_size)
     id2word = dict()
     for i in range(vocab_size):
         id2word[i] = str(i)
