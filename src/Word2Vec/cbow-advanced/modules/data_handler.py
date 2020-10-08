@@ -16,7 +16,7 @@ class CbowDataHandler:
         window_size):
 
         with open(file_name, encoding='utf-8') as f:
-            corpora = [sentence.split() for sentence in f.readlines()[:100]] #check
+            corpora = [sentence.split() for sentence in f.readlines()[:]] #check
 
         self.train_ratio = train_ratio
         self.batch_size = batch_size

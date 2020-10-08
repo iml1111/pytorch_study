@@ -64,7 +64,6 @@ def main(config):
     test_data = ['맞교환', '백색', '합판', '이메일']
     ctx_idxs = [data_handler.w2i[w] for w in test_data]
     ctx_var = Variable(torch.LongTensor([ctx_idxs])).to(config.gpu_id)
-    print(ctx_var.size())
 
     model.zero_grad()
     y = model(ctx_var)
