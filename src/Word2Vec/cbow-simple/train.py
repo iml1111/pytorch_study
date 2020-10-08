@@ -74,7 +74,7 @@ def test_cbow(test_data, model):
 
 if __name__ == '__main__':
     cb_model, cb_losses = train_cbow()
-    test_data = create_cbow_dataset(text)
     
-    test_cbow(test_data, cb_model)
-    showPlot(cb_losses, 'CBOW Losses')
+    #test_data = create_cbow_dataset(text)
+    #test_cbow(test_data, cb_model)
+    #showPlot(cb_losses, 'CBOW Losses')

@@ -1,12 +1,11 @@
 from copy import deepcopy
 import numpy as np
 import torch
-import torch.nn.utils as torch_utils
 from ignite.engine import Engine
 from ignite.engine import Events
 from ignite.metrics import RunningAverage
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
-from mnist_classification.utils import get_grad_norm, get_parameter_norm
+from modules.utils import get_grad_norm, get_parameter_norm
 
 VERBOSE_SILENT = 0
 VERBOSE_EPOCH_WISE = 1
@@ -23,7 +22,6 @@ class IgniteEngine(Engine):
         self.best_loss = np.inf
         self.best_model = None
         self.device = next(model.parameters()).device
-        # 인자로 받은 함수 실행
         super().__init__(func) 
 
     @staticmethod
@@ -31,37 +29,18 @@ class IgniteEngine(Engine):
         engine.model.train()
         engine.optimizer.zero_grad()
         x, y = mini_batch
-        # 학습하는 중간에 데이터를 GPU로 전송해줌
         x, y = x.to(engine.device), y.to(engine.device)
 
         pred_y = engine.model(x)
-
         loss = engine.crit(pred_y, y)
         loss.backward()
-
-        # 회귀 예측의 경우, 어큐러시 측정이 불가능하므로 스킵해야 함
-        # Y가 정수로 나온다면 Classification일 것이라 가정
         if isinstance(y, torch.LongTensor) or isinstance(y, torch.cuda.LongTensor):
             accuracy = (torch.argmax(pred_y, dim=-1) == y).sum() / float(y.size(0))
         else:
             accuracy = 0
 
-        # 파라미터 놈: 학습이 진행될수록 점진적으로 커짐
         p_norm = float(get_parameter_norm(engine.model.parameters()))
-        # 그래드 놈: 값이 크면 클수록 많이 배우고 있다는 뜻
-        # 처음 시작할 때는 많이 배우기 때문에 값이 클 것임 (=기울기가 가파름)
-        # 진행됨에 따라서 서서히 줄어드는 게 보편적 (물론 아닐 수도 있음)
-        # 적었다 커졌다 날뛰거나, Nan으로 Loss 자체가 날라가서 학습이 실패할수도 있음
-        # 즉, 학습의 안정성을 보장함
         g_norm = float(get_grad_norm(engine.model.parameters()))
-
-        # 그래디언트 클리핑 (스텝 전에 해줘야함)
-        if engine.config.max_grad > 0:
-            torch_utils.clip_grad_norm_(
-                engine.model.parameters(),
-                engine.config.max_grad,
-                norm_type=2,
-            )
 
         engine.optimizer.step()
 

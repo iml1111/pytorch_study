@@ -34,7 +34,7 @@ class IgniteEngine(Engine):
         x, y = x.to(engine.device), y.to(engine.device)
 
         pred_y = engine.model(x)
-
+        
         loss = engine.crit(pred_y, y)
         loss.backward()
 
