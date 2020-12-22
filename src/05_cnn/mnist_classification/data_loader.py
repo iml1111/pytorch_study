@@ -62,9 +62,10 @@ def get_loaders(config):
 		index=indices
 	).split([train_cnt, valid_cnt], dim=0)
 
-	# 테스트 데이터 불러오기
+	# 테스트 데이터 불러와서 트레인에 합치기 (어차피 안씀)
 	test_x, test_y = load_mnist(is_train=False, flatten=False)
-
+	train_x = torch.cat((train_x, test_x), 0)
+	train_y = torch.cat((train_y, test_y), 0)
 
 	# 데이터 로더 생성(셔플: 트레인은 필수, 나머지는 자유)
 	train_loader = DataLoader(

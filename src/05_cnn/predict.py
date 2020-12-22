@@ -29,6 +29,10 @@ def plot(x, pred_y):
 
 def test(model, x, y, to_be_shown=True):
     model.eval()
+
+    print(x.size())
+    print(x)
+
     with torch.no_grad():
         pred_y = model(x)
         correct_cnt = (y.squeeze() == torch.argmax(pred_y, dim=-1)).sum()
