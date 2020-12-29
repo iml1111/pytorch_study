@@ -4,7 +4,6 @@
 해당 실습 코드를 구현하기 위해 참고한 References는 맨 아래의 링크들을 참고해주세요.
 
 
-
 ## Indexes
 
 1. linear_regression_model
@@ -18,7 +17,6 @@
 9. word_embedding
 10. text_classification
 11. Word2vec
-
 
 
 # References
