@@ -113,6 +113,7 @@ class Attention(nn.Module):
         # query = (batch_size, 1, hidden_size)
         query = self.linear(h_t_tgt)
         # weight = (batch_size, 1, length)
+        # length -> encoder 단 모든 타임스텝 결과에 대한 가중치를 뜻함
         weight = torch.bmm(query, h_src.transpose(1, 2))
 
         if mask:
@@ -121,7 +122,9 @@ class Attention(nn.Module):
             # mask.unsqueeze(1) = (batch_size, 1, length)
             weight.masked_fill_(mask.unsqueeze(1), -float('inf'))
 
+        # weight = (batch_size, 1, length)
         weight = self.softmax(weight)
+        # h_src = (batch_size, length, hidden_size)
         # context_vector = (batch_size, 1, hidden_size)
         context_vector = torch.bmm(weight, h_src)
         return context_vector
@@ -186,3 +189,141 @@ class Seq2Seq(nn.Module):
         self.concat = nn.Linear(hidden_size * 2, hidden_size)
         self.tanh = nn.Tanh()
         self.gneerator = Generator(hidden_size, output_size)
+
+    def generate_mask(self, x, length):
+        mask = []
+        max_length = max(length)
+        for l in length:
+            if max_length - l > 0:
+                mask += [
+                    torch.cat(
+                        [   
+                            # 유효한 토큰 영역
+                            x.new_ones(1, l).zero_(),
+                            # PAD 토큰 영역
+                            x.new_ones(1, max_length - l),
+                        ],
+                        dim=-1
+                    )
+                ]
+            else:
+                # 전부 유효한 패드 토큰의 경우
+                mask += [x.new_ones(1, l).zero_()]
+
+        mask = torch.cat(mask, dim=0).bool()
+        return mask
+
+    def merge_encoder_hiddens(self, encoder_hiddens):
+        '''
+        Encoder에 나온 hidden값을 Decoder로 넘기기 위해
+        해당 인풋 모양을 맞춰주어야 함
+        Encoder는 Bi-direction이기 때문에 미리 hidden / 2로
+        output을 뽑아서 양쪽 방향에서 나온걸 합쳐줘서 
+        hidden / 2 * 2 처리를 해줌
+        
+        '''
+        # h_0_tgt = (n_layers * 2, batch_size, hidden_size / 2)
+        # c_0_tgt = (n_layers * 2, batch_size, hidden_size / 2)
+        h_0_tgt, c_0_tgt = encoder_hiddens
+        batch_size = h_0_tgt.size(1)
+
+        h_0_tgt = h_0_tgt.transpose(0, 1).contiguous().view(
+            batch_size,
+            -1,
+            self.hidden_size
+        ).transpose(0, 1).contiguous()
+        c_0_tgt = c_0_tgt.transpose(0, 1).contiguous().view(
+            batch_size,
+            -1,
+            self.hidden_size
+        ).transpose(0, 1).contiguous()
+        
+        # h_0_tgt = (n_layers, batch_size, hidden_size)
+        # c_0_tgt = (n_layers, batch_size, hidden_size)
+        return h_0_tgt, c_0_tgt
+
+    def forward(self, src, tgt):
+        '''
+        최종적인 Seq2Seq 신경망
+        - 당연히 src, tgt의 길이는 다를 수 있음
+        
+        src = (batch_size, length_n) - 원문
+        tgt = (batch_size, length_m) - 번역문
+        output = (batch_size, length_m, V_tgt)
+        V_tgt -> 아웃풋 vocab size
+        '''
+        
+        mask = None
+        x_length = None
+        if isinstance(src, tuple):
+            '''
+            x = (batch_size, length_n)
+            x_length = (batch_size) -> 각 문장의 실제 유효 길이 정보(PAD 제외)
+            '''
+            x, x_length = src
+            mask = self.generate_mask(x, x_length)
+        else:
+            x = src
+        
+        #---------Encoder Step---------#
+        # emb_src = (batch_size, length_n, word_vec_size)
+        emb_src = self.emb_src(x)
+        '''
+        # h_src = (batch_size, length_n, hidden_size)
+        # h_0_tgt[0] = (n_layers * 2, batch_size, hidden_size / 2)
+        h_0_tgt[0]는 Bi-directional RNN에서 나왔기 때문에 n_layers가 2배로 곱해짐
+        이걸 이용해서 hidden_size / 2 부분을 concat 시켜서 본래의 hidden_size로 복귀
+        '''
+        h_src, h_0_tgt = self.encoder((emb_src, x_length))
+        h_0_tgt = self.merge_encoder_hiddens(h_0_tgt)
+
+        #---------Decoder Step---------#
+        # emb_tgt = (batch_size, length_m, word_vec_size)
+        emb_tgt = self.emb_dec(tgt)
+        # Decoder에서 나온 결과 hidden_state 값을 보관하는 리스트
+        # 후에 Generator로 한꺼번에 전달하기 위함
+        h_tilde = []
+
+        # 이전 타입스텝의 h_tilde 값(Input Feeding을 위함), 처음에는 None
+        h_t_tilde = None
+        # 이전 타임 스텝의 히든 값, 처음에는 인코더의 최종 hidden값
+        decoder_hidden = h_0_tgt
+        for t in range(tgt.size(1)):
+            # 현재 타입스텝에 해당하는 emb 값만 가져옴
+            # emb_t = (batch_size, 1, word_vec_size)
+            emb_t = emb_tgt[:, t,  :].unsqueeze(1)
+
+            # h_t_tilde = (batch_size, 1, hidden_size)
+            # decoder_output = (batch_size, 1, hidden_size)
+            # decoder_hidden = (n_layers, batch_size, hidden_size)
+            decoder_output, decoder_hidden = self.decoder(
+                emb_t,
+                h_t_tilde,
+                decoder_hidden
+            )
+            # context_vector = (batch_size, 1, hidden_size)
+            context_vector = self.attn(h_src, decoder_output, mask)
+
+            # 현재 타입스텝의 h_tilde 값은 decoder_output + context_vector
+            # 단, concat layer를 통해 본래의 hidden_size로 압축시킴
+            # h_t_tilde = (batch_size, 1, hidden_size)
+            h_t_tilde = self.tanh(
+                self.concat(
+                    torch.cat(
+                        [
+                            decoder_output,
+                            context_vector
+                        ], dim=-1
+                    )
+                )
+            )
+
+            h_tilde += [h_t_tilde]
+
+        # h_tilde = (batch_size, length_m, hidden_size)
+        h_tilde = torch.cat(h_tilde, dim=1)
+        # y_hat = (batch_size, length_m, output_size)
+        y_hat = self.generator(h_tilde)
+        return y_hat
+
+
