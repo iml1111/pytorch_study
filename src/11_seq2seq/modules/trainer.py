@@ -163,12 +163,12 @@ class IgniteEngine(Engine):
             # y = (batch_size, length_m)
             x, y = mini_batch.src, mini_batch.tgt[0][:, 1:]
 
-            with autocast(not engine.config.off_autocast):
-                y_hat = engine.model(x, mini_batch.tgt[0][:, :-1])
-                loss = engine.crit(
-                    y_hat.contiguous().view(-1, y_hat.size(-1)),
-                    y.contiguous().view(-1),
-                )
+            #with autocast(not engine.config.off_autocast):
+            y_hat = engine.model(x, mini_batch.tgt[0][:, :-1])
+            loss = engine.crit(
+                y_hat.contiguous().view(-1, y_hat.size(-1)),
+                y.contiguous().view(-1),
+            )
 
         word_count = int(mini_batch.tgt[1].sum())
         loss = float(loss / word_count)
