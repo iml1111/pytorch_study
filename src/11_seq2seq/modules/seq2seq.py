@@ -326,4 +326,78 @@ class Seq2Seq(nn.Module):
         y_hat = self.generator(h_tilde)
         return y_hat
 
+    def search(self, src, is_greedy=True, max_length=255):
+        mask = None
+        x_length = None
+        if isinstance(src, tuple):
+            x, x_length = src
+            mask = self.generate_mask(x, x_length)
+        else:
+            x = src
+        batch_size = x.size(0)
 
+        emb_src = self.emb_src(x)
+        h_src, h_0_tgt = self.encoder((emb_src, x_length))
+        decoder_hidden = self.merge_encoder_hiddens(h_0_tgt)
+
+        # 모든 문장(batch)에 대하여 첫 토큰으로 BOS로 고정
+        y = x.new(batch_size, 1).zero_() + data_loader.BOS
+
+        '''
+        id_decoding = (batch_size, 1) => 전부 True로 채워짐
+        각 문장들의 decoding 완료 여부 저장
+        '''
+        is_decoding = x.new_ones(batch_size, 1).bool()
+        h_t_tilde, y_hats, indice = None, [], []
+
+        '''
+        is_decoding.sum() > 0: 아직 디코딩이 끝나지 않은 문장이 있거나
+        len(indice) < max_length: time-step이 max_length보다 적을 경우 Loop
+        '''
+        while is_decoding.sum() > 0 and len(indice) < max_length:
+            # emb_t = (batch_size, 1, word_vec_size)
+            emb_t = self.emb_dec(y)
+            # decoder_output = (batch_size, 1, hidden_size)
+            decoder_output, decoder_hidden = self.decoder(
+                emb_t,
+                h_t_tilde,
+                decoder_hidden
+            )
+            # context_vector = (batch_size, 1, hidden_size)
+            context_vector = self.attn(h_src, decoder_output, mask)
+            # h_t_tilde = (batch_size, 1, hidden_size)
+            h_t_tilde = self.tanh(
+                self.concat(
+                    torch.cat(
+                        [
+                            decoder_output,
+                            context_vector
+                        ], dim=-1
+                    )
+                )
+            )
+            # y_hat = (batch_size, 1, output_size)
+            y_hat = self.generator(h_t_tilde)
+            y_hats += [y_hat]
+
+            # y = (batch_size, 1)
+            if is_greedy:
+                y = y_hat.argmax(dim=-1)
+            else:
+                # Random Sampling 기반 접근
+                y = torch.multinomial(y_hat.exp().view(batch_size, -1), 1)
+
+            # is_decoding 정보를 반전시켜, 디코딩이 끝난 부분이 True가 됨
+            # True가 된 모든 예측값에 대한 무효처리 (PAD로 덮어씀)
+            y = y.masked_fill_(~is_decoding, data_loader.PAD)
+            # 각 문장 디코딩에 대한 완료 여부 갱신
+            # EOS와 같다면 False가 뜨면서 is_decoding이 False로 바뀜
+            is_decoding = is_decoding * torch.ne(y, data_loader.EOS)
+            indice += [y]
+
+        # y_hat = (batch_size, length, output_size)
+        # indice = (batch_size, length)
+        y_hats = torch.cat(y_hats, dim=1)
+        indice = torch.cat(indice, dim=1)
+
+        return y_hats, indice
