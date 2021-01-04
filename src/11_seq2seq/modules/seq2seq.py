@@ -116,7 +116,7 @@ class Attention(nn.Module):
         # length -> encoder 단 모든 타임스텝 결과에 대한 가중치를 뜻함
         weight = torch.bmm(query, h_src.transpose(1, 2))
 
-        if mask:
+        if mask is not None:
             # PAD token 자리의 가중치를 모두 -inf로 치환(학습 미반영)
             # 마스크를 씌우기 위해 mask가 해당 weight의 shape과 같아야함
             # mask.unsqueeze(1) = (batch_size, 1, length)
@@ -135,7 +135,7 @@ class Generator(nn.Module):
     def __init__(self, hidden_size, output_size):
         super(Generator, self).__init__()
 
-        self.output = nn.linear(hidden_size, output_size)
+        self.output = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=-1) # 마지막 차원으로 수행
 
     def forward(self, x):
@@ -188,7 +188,7 @@ class Seq2Seq(nn.Module):
 
         self.concat = nn.Linear(hidden_size * 2, hidden_size)
         self.tanh = nn.Tanh()
-        self.gneerator = Generator(hidden_size, output_size)
+        self.generator = Generator(hidden_size, output_size)
 
     def generate_mask(self, x, length):
         mask = []
