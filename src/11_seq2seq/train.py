@@ -179,31 +179,6 @@ def get_optimizer(model, config):
     return optimizer
 
 
-def get_scheduler(optimizer, config):
-    '''
-    # learing_rate 스케쥴러
-    학습도중, learning_rate를 조정하기 위한 역할
-    ex) epoch 9까지 lr:1로 하다가, 10부터 0.5, 0.25, 0.125 식으로 낮춰라 등
-    아래 코드에서는 lr_decay_start번째부터 config.lr_step를 곱하며 낮춰감
-    # 그러나 이부분은 사용하지 않음 X
-    '''
-    if config.lr_step > 0:
-        lr_scheduler = optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=[i for i in range(
-                max(0, config.lr_decay_start - 1),
-                (config.init_epoch - 1) + config.n_epochs,
-                config.lr_step
-            )],
-            gamma=config.lr_gamma,
-            last_epoch=config.init_epoch - 1 if config.init_epoch > 1 else -1,
-        )
-    else:
-        lr_scheduler = None
-
-    return lr_scheduler
-
-
 def main(config, model_weight=None, opt_weight=None):
     def print_config(config):
         pp = pprint.PrettyPrinter(indent=4)
@@ -232,10 +207,10 @@ def main(config, model_weight=None, opt_weight=None):
 
     optimizer = get_optimizer(model, config)
 
-    if opt_weight and (config.use_adam or config.use_radam):
+    if opt_weight:
         optimizer.load_state_dict(opt_weight)
 
-    lr_scheduler = get_scheduler(optimizer, config)
+    lr_scheduler = None
 
     if config.verbose >= 2:
         print(model)

@@ -17,8 +17,8 @@ class Encoder(nn.Module):
             hidden_size=int(hidden_size / 2),
             num_layers=n_layers,
             dropout=dropout_p,
+            bidirectional=True,
             batch_first=True,
-            bidirectional=True
         )
 
     def forward(self, emb):
@@ -264,6 +264,9 @@ class Seq2Seq(nn.Module):
             mask = self.generate_mask(x, x_length)
         else:
             x = src
+
+        if isinstance(tgt, tuple):
+            tgt = tgt[0]
         
         #---------Encoder Step---------#
         # emb_src = (batch_size, length_n, word_vec_size)

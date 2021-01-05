@@ -7,9 +7,9 @@ class DataLoader:
 
     def __init__(
         self,
-        train_fn,
-        valid_fn,
-        exts,
+        train_fn=None,
+        valid_fn=None,
+        exts=None,
         batch_size=64,
         device='cpu',
         max_vocab=9999999,
@@ -39,40 +39,41 @@ class DataLoader:
             eos_token=None,
         )
 
-        train = TranslationDataset(
-            path=train_fn,
-            exts=exts,
-            fields=[('src', self.src), ('tgt', self.tgt)],
-            max_length=max_length
-        )
-        valid = TranslationDataset(
-            path=valid_fn,
-            exts=exts,
-            fields=[('src', self.src), ('tgt', self.tgt)],
-            max_length=max_length,
-        )
+        if train_fn is not None and valid_fn is not None and exts is not None:
+            train = TranslationDataset(
+                path=train_fn,
+                exts=exts,
+                fields=[('src', self.src), ('tgt', self.tgt)],
+                max_length=max_length
+            )
+            valid = TranslationDataset(
+                path=valid_fn,
+                exts=exts,
+                fields=[('src', self.src), ('tgt', self.tgt)],
+                max_length=max_length,
+            )
 
-        self.train_iter = data.BucketIterator(
-            train,
-            batch_size=batch_size,
-            device='cuda:%d' % device if device >= 0 else 'cpu',
-            shuffle=shuffle,
-            # 비슷한 길이끼리 미니 배치를 만들도록 정렬
-            sort_key=lambda x: len(x.tgt) + (max_length * len(x.src)),
-            sort_within_batch=True,
-        )
-        self.valid_iter = data.BucketIterator(
-            valid,
-            batch_size=batch_size,
-            device='cuda:%d' % device if device >= 0 else 'cpu',
-            shuffle=False,
-            # 비슷한 길이끼리 미니 배치를 만들도록 정렬
-            sort_key=lambda x: len(x.tgt) + (max_length * len(x.src)),
-            sort_within_batch=True,
-        )
+            self.train_iter = data.BucketIterator(
+                train,
+                batch_size=batch_size,
+                device='cuda:%d' % device if device >= 0 else 'cpu',
+                shuffle=shuffle,
+                # 비슷한 길이끼리 미니 배치를 만들도록 정렬
+                sort_key=lambda x: len(x.tgt) + (max_length * len(x.src)),
+                sort_within_batch=True,
+            )
+            self.valid_iter = data.BucketIterator(
+                valid,
+                batch_size=batch_size,
+                device='cuda:%d' % device if device >= 0 else 'cpu',
+                shuffle=False,
+                # 비슷한 길이끼리 미니 배치를 만들도록 정렬
+                sort_key=lambda x: len(x.tgt) + (max_length * len(x.src)),
+                sort_within_batch=True,
+            )
 
-        self.src.build_vocab(train, max_size=max_vocab)
-        self.tgt.build_vocab(train, max_size=max_vocab)
+            self.src.build_vocab(train, max_size=max_vocab)
+            self.tgt.build_vocab(train, max_size=max_vocab)
 
     def load_vocab(self, src_vocab, tgt_vocab):
         self.src.vocab = src_vocab

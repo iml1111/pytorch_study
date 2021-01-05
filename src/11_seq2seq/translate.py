@@ -5,7 +5,7 @@ from operator import itemgetter
 import torch
 from modules.data_loader import DataLoader
 import modules.data_loader as data_loader
-from modules.models.seq2seq import Seq2Seq
+from modules.seq2seq import Seq2Seq
 
 
 def define_argparser():

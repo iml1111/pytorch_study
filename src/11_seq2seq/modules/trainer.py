@@ -113,10 +113,7 @@ class IgniteEngine(Engine):
 
         # 현재 batch 내에 모든 토큰 수
         word_count = int(mini_batch.tgt[1].sum())
-
-        # 점점 커짐
         p_norm = float(get_parameter_norm(engine.model.parameters()))
-        # 점점 작아짐
         g_norm = float(get_grad_norm(engine.model.parameters()))
 
         # Gradient Accumulation 여부, 맞아 떨어진다면 step까지 수행, 아니면 스킵
