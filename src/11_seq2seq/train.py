@@ -3,7 +3,6 @@ import pprint
 import torch
 from torch import optim
 import torch.nn as nn
-import torch_optimizer as custom_optim
 
 from modules.data_loader import DataLoader
 import modules.data_loader as data_loader
