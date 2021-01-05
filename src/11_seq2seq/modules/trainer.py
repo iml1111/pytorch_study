@@ -59,7 +59,7 @@ class IgniteEngine(Engine):
         그 중에서 실제 문장 데이터만 GPU 메모리로 전송
         '''
         mini_batch.src = (mini_batch.src[0].to(device), mini_batch.src[1])
-        mini_batch.tgt = (mini_batch.src[0].to(device), mini_batch.tgt[1])
+        mini_batch.tgt = (mini_batch.tgt[0].to(device), mini_batch.tgt[1])
 
         '''
         맨 처음 Input으로 x가 들어감
