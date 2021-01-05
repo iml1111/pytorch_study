@@ -1,10 +1,9 @@
 import numpy as np
 
 import torch
-from torch import optim
 import torch.nn.utils as torch_utils
-from torch.cuda.amp import autocast
-from torch.cuda.amp import GradScaler
+# from torch.cuda.amp import autocast
+# from torch.cuda.amp import GradScaler
 
 from ignite.engine import Engine
 from ignite.engine import Events
@@ -31,7 +30,7 @@ class MaximumLikelihoodEstimationEngine(Engine):
         super().__init__(func)
 
         self.best_loss = np.inf
-        self.scaler = GradScaler()
+        #self.scaler = GradScaler()
 
     @staticmethod
     #@profile
@@ -55,23 +54,23 @@ class MaximumLikelihoodEstimationEngine(Engine):
         # |x| = (batch_size, length)
         # |y| = (batch_size, length)
 
-        with autocast(not engine.config.off_autocast):
-            # Take feed-forward
-            # Similar as before, the input of decoder does not have EOS token.
-            # Thus, remove EOS token for decoder input.
-            y_hat = engine.model(x, mini_batch.tgt[0][:, :-1])
-            # |y_hat| = (batch_size, length, output_size)
+        #with autocast(not engine.config.off_autocast):
+        # Take feed-forward
+        # Similar as before, the input of decoder does not have EOS token.
+        # Thus, remove EOS token for decoder input.
+        y_hat = engine.model(x, mini_batch.tgt[0][:, :-1])
+        # |y_hat| = (batch_size, length, output_size)
 
-            loss = engine.crit(
-                y_hat.contiguous().view(-1, y_hat.size(-1)),
-                y.contiguous().view(-1)
-            )
-            backward_target = loss.div(y.size(0)).div(engine.config.iteration_per_update)
+        loss = engine.crit(
+            y_hat.contiguous().view(-1, y_hat.size(-1)),
+            y.contiguous().view(-1)
+        )
+        backward_target = loss.div(y.size(0)).div(engine.config.iteration_per_update)
 
-        if engine.config.gpu_id >= 0 and not engine.config.off_autocast:
-            engine.scaler.scale(backward_target).backward()
-        else:
-            backward_target.backward()
+        # if engine.config.gpu_id >= 0 and not engine.config.off_autocast:
+        #     engine.scaler.scale(backward_target).backward()
+        # else:
+        backward_target.backward()
 
         word_count = int(mini_batch.tgt[1].sum())
         p_norm = float(get_parameter_norm(engine.model.parameters()))
@@ -85,12 +84,12 @@ class MaximumLikelihoodEstimationEngine(Engine):
                 engine.config.max_grad_norm,
             )
             # Take a step of gradient descent.
-            if engine.config.gpu_id >= 0 and not engine.config.off_autocast:
-                # Use scaler instead of engine.optimizer.step() if using GPU.
-                engine.scaler.step(engine.optimizer)
-                engine.scaler.update()
-            else:
-                engine.optimizer.step()
+            # if engine.config.gpu_id >= 0 and not engine.config.off_autocast:
+            #     # Use scaler instead of engine.optimizer.step() if using GPU.
+            #     engine.scaler.step(engine.optimizer)
+            #     engine.scaler.update()
+            # else:
+            engine.optimizer.step()
 
         loss = float(loss / word_count)
         ppl = np.exp(loss)
@@ -115,13 +114,13 @@ class MaximumLikelihoodEstimationEngine(Engine):
             # |x| = (batch_size, length)
             # |y| = (batch_size, length)
 
-            with autocast(not engine.config.off_autocast):
-                y_hat = engine.model(x, mini_batch.tgt[0][:, :-1])
-                # |y_hat| = (batch_size, n_classes)
-                loss = engine.crit(
-                    y_hat.contiguous().view(-1, y_hat.size(-1)),
-                    y.contiguous().view(-1),
-                )
+            #with autocast(not engine.config.off_autocast):
+            y_hat = engine.model(x, mini_batch.tgt[0][:, :-1])
+            # |y_hat| = (batch_size, n_classes)
+            loss = engine.crit(
+                y_hat.contiguous().view(-1, y_hat.size(-1)),
+                y.contiguous().view(-1),
+            )
         
         word_count = int(mini_batch.tgt[1].sum())
         loss = float(loss / word_count)
