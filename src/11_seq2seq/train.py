@@ -56,7 +56,7 @@ def define_argparser(is_continue=False):
     p.add_argument(
         '--n_epochs',
         type=int,
-        default=20,
+        default=30,
         help='Number of epochs to train. Default=%(default)s'
     )
     p.add_argument(
