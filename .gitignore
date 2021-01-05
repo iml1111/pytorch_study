@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-models/
+model/
 data/
 *.pth
 model_test.txt
