@@ -48,7 +48,7 @@ class IgniteEngine(Engine):
         '''
         if engine.state.iteration % engine.config.iteration_per_update == 1 or \
            engine.config.iteration_per_update == 1:
-           if engine.state.iteration > 1:
+            if engine.state.iteration > 1:
                 engine.optimizer.zero_grad()
 
         # 모델의 첫번째 파라미터가 config임
