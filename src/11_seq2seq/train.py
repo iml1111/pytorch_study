@@ -82,7 +82,7 @@ def define_argparser(is_continue=False):
     p.add_argument(
         '--max_length',
         type=int,
-        default=64,
+        default=100,
         help='Maximum length of the training sequence. Default=%(default)s'
     )
     p.add_argument(
