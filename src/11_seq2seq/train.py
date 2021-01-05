@@ -47,11 +47,6 @@ def define_argparser(is_continue=False):
         default=0,
         help='GPU ID to train. Currently, GPU parallel is not supported. -1 for CPU. Default=%(default)s'
     )
-    p.add_argument(
-        '--off_autocast',
-        action='store_true',
-        help='Turn-off Automatic Mixed Precision (AMP), which speed-up training.',
-    )
 
     p.add_argument(
         '--batch_size',
@@ -126,24 +121,6 @@ def define_argparser(is_continue=False):
         type=float,
         default=1e-3,
         help='Initial learning rate. Default=%(default)s',
-    )
-    p.add_argument(
-        '--lr_step',
-        type=int,
-        default=0,
-        help='Number of epochs for each learning rate decay. Default=%(default)s',
-    )
-    p.add_argument(
-        '--lr_gamma',
-        type=float,
-        default=.5,
-        help='Learning rate decay rate. Default=%(default)s',
-    )
-    p.add_argument(
-        '--lr_decay_start',
-        type=int,
-        default=10,
-        help='Learning rate decay start at. Default=%(default)s',
     )
 
     config = p.parse_args()
