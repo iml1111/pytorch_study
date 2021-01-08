@@ -4,6 +4,44 @@ from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 import modules.data_loader as data_loader
 
+class Attention(nn.Module):
+
+    def __init__(self, hidden_size):
+        super(Attention, self).__init__()
+
+        self.linear = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, h_src, h_t_tgt, mask=None):
+        '''
+        Encoder 단의 원문 벡터값과 현재 값의 유사도 산출
+        h_src: Encoder 전체 time-step의 히든 스테이트 출력값
+        h_t_tgt: Decoder의 현재 time-step 히든 스테이트 출력값
+        mask: 각 문장 각 토큰에 대한 PAD 여부 (True or False)
+        '''
+        # h_src = (batch_size, length, hidden_size)
+        # h_t_tgt = (batch_size, 1, hidden_size)
+        # mask = (batch_size, length)
+        
+        # query = (batch_size, 1, hidden_size)
+        query = self.linear(h_t_tgt)
+        # weight = (batch_size, 1, length)
+        # length -> encoder 단 모든 타임스텝 결과에 대한 가중치를 뜻함
+        weight = torch.bmm(query, h_src.transpose(1, 2))
+
+        if mask is not None:
+            # PAD token 자리의 가중치를 모두 -inf로 치환(학습 미반영)
+            # 마스크를 씌우기 위해 mask가 해당 weight의 shape과 같아야함
+            # mask.unsqueeze(1) = (batch_size, 1, length)
+            weight.masked_fill_(mask.unsqueeze(1), -float('inf'))
+
+        # weight = (batch_size, 1, length)
+        weight = self.softmax(weight)
+        # h_src = (batch_size, length, hidden_size)
+        # context_vector = (batch_size, 1, hidden_size)
+        context_vector = torch.bmm(weight, h_src)
+        return context_vector
+
 
 class Encoder(nn.Module):
 
@@ -89,45 +127,6 @@ class Decoder(nn.Module):
         # h[0] = (n_layers, batch_size, hidden_size)
         y, h = self.rnn(x, h_t_1)
         return y, h
-
-
-class Attention(nn.Module):
-
-    def __init__(self, hidden_size):
-        super(Attention, self).__init__()
-
-        self.linear = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, h_src, h_t_tgt, mask=None):
-        '''
-        Encoder 단의 원문 벡터값과 현재 값의 유사도 산출
-        h_src: Encoder 전체 time-step의 히든 스테이트 출력값
-        h_t_tgt: Decoder의 현재 time-step 히든 스테이트 출력값
-        mask: 각 문장 각 토큰에 대한 PAD 여부 (True or False)
-        '''
-        # h_src = (batch_size, length, hidden_size)
-        # h_t_tgt = (batch_size, 1, hidden_size)
-        # mask = (batch_size, length)
-        
-        # query = (batch_size, 1, hidden_size)
-        query = self.linear(h_t_tgt)
-        # weight = (batch_size, 1, length)
-        # length -> encoder 단 모든 타임스텝 결과에 대한 가중치를 뜻함
-        weight = torch.bmm(query, h_src.transpose(1, 2))
-
-        if mask is not None:
-            # PAD token 자리의 가중치를 모두 -inf로 치환(학습 미반영)
-            # 마스크를 씌우기 위해 mask가 해당 weight의 shape과 같아야함
-            # mask.unsqueeze(1) = (batch_size, 1, length)
-            weight.masked_fill_(mask.unsqueeze(1), -float('inf'))
-
-        # weight = (batch_size, 1, length)
-        weight = self.softmax(weight)
-        # h_src = (batch_size, length, hidden_size)
-        # context_vector = (batch_size, 1, hidden_size)
-        context_vector = torch.bmm(weight, h_src)
-        return context_vector
 
 
 class Generator(nn.Module):
