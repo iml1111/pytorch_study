@@ -35,8 +35,8 @@ class DataLoader:
             batch_first=True,
             include_lengths=True,
             fix_length=fix_length,
-            init_token=None,
-            eos_token=None,
+            init_token='<BOS>',
+            eos_token='<EOS>',
         )
 
         if train_fn is not None and valid_fn is not None and exts is not None:
