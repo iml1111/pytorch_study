@@ -29,6 +29,8 @@ class Attention(nn.Module):
         '''
         w = torch.bmm(Q, K.transpose(1, 2))
         # |w| = (batch_size, m, n)
+        # w: 각 문장(batch)의 각 tgt 타임스텝(m)에 대한 src 토큰들의 가중치
+        # 단, 이때 src 토큰들 중, PAD는 학습에 미반영시킬 필요가 있음(mask)
         if mask is not None:
             # PAD token 자리의 가중치를 모두 -inf로 치환(학습 미반영)
             # 마스크를 씌우기 위해 mask가 해당 weight의 shape과 같아야함
@@ -67,16 +69,21 @@ class MultiHead(nn.Module):
         - 셀프 어텐션시, Q==K==V (이때, 모두 n임)
         - decoder의 어텐션시, tgt in Q, src in K, V
 
-        # |Q|    = (batch_size, m, hidden_size)
-        # |K|    = (batch_size, n, hidden_size)
-        # |V|    = |K|
+        # |Q| = (batch_size, m, hidden_size)
+        # |K| = (batch_size, n, hidden_size)
+        # |V| = (batch_size, n, hidden_size)
         
         # |mask| = (batch_size, m, n)
         각 문장 각 토큰에 대한 PAD 여부
+        후에 어텐션시, weight가 생성되는데, 아래와 같이 설정됨
+        - 각 문장(batch)의 각 tgt 타임스텝(m)에 대한 src 토큰들의 가중치
+        단, 이때 src 토큰들 중, PAD는 학습에 미반영시킬 필요가 있음(mask)
+
         기존 seq2seq의 mask의 경우 (batch_size, n or m)이였지만,
         멀티 헤드 어텐션은 모든 단어가 타겟 문장의 모든 단어와 어텐션을 수행하는데,
         병렬 연산을 위해서 mask를 재활용하지 않고 늘려줌 
         '''
+        
         '''
         멀티헤드 어텐션을 위한 분할 작업 준비
         - 각 linear transform layer에서 나온 벡터를, 헤드의 수만큼 분할시킴
@@ -146,19 +153,41 @@ class EncoderBlock(nn.Module):
         '''
         # |x|    = (batch_size, n, hidden_size)
         입력받은 모든 문장(batch), 모든 단어(n)들의 임베딩(hidden_size)
-        # |mask| = (batch_size, n, n)
-        각 문장들의 각 단어의 PAD 여부 * n으로 늘려준 것(병렬 연산을 위함)
+        # |mask| = (batch_size, n, n) -> 무조건 셀프 어텐션이므로 같음
+        각 문장들의 각 단어의 PAD 여부 * n(dim=1)으로 늘려준 것(병렬 연산을 위함)
 
-        기본적으로 순서는 이렇게됨
-        x -> (norm) -> (attn) ??????
+        Pre LN은 기본적으로 순서는 이렇게됨
+        x -> (norm) -> (attn) -> (dropout) -> ((+x) residual_connection) = z
+        z -> (norm) -> (fc) -> (dropout) -> ((+z) residual_connection) = y
+        '''
+
+        '''
+        # Post-LN:
+        z = self.attn_norm(
+            x + self.attn_dropout(
+                self.attn(
+                    Q=x, K=x, V=x, mask=mask
+                )
+            )
+        )
+        z = self.fc_norm(
+            z + self.fc_dropout(
+                self.fc(z)
+            )
+        ) 
         '''
 
         z = self.attn_norm(x)
-        z = x + self.attn_dropout(self.attn(Q=z,
-                                            K=z,
-                                            V=z,
-                                            mask=mask))
-        z = z + self.fc_dropout(self.fc(self.fc_norm(z)))
+        z = x + self.attn_dropout(
+                    self.attn(
+                        Q=z, K=z,V=z, mask=mask
+                    )
+                )
+        z = z + self.fc_dropout(
+                    self.fc(
+                        self.fc_norm(z)
+                    )
+                )
         # |z| = (batch_size, n, hidden_size)
 
         return z, mask
@@ -192,15 +221,15 @@ class DecoderBlock(nn.Module):
         self.fc_dropout = nn.Dropout(dropout_p)
 
     def forward(self, x, key_and_value, mask, prev, future_mask):
-        # |key_and_value| = (batch_size, n, hidden_size)
+        # |key_and_value| = (batch_size, n, hidden_size) = K, V
         # |mask|          = (batch_size, m, n)
 
-        # In case of inference, we don't have to repeat same feed-forward operations.
-        # Thus, we save previous feed-forward results.
+        # 학습과 추론시에 방법이 다르기 때문에 분기를 해줄 필요가 있음.
         if prev is None: # Training mode
-            # |x|           = (batch_size, m, hidden_size)
+            # |x|           = (batch_size, m, hidden_size) = Q
             # |prev|        = None
             # |future_mask| = (batch_size, m, m)
+            # 셀프 어텐션이므로 같음, 학습 중 미래의 토큰에 대한 mask 처리
             # |z|           = (batch_size, m, hidden_size)
 
             # Post-LN:
@@ -214,10 +243,13 @@ class DecoderBlock(nn.Module):
                 self.masked_attn(z, z, z, mask=future_mask)
             )
         else: # Inference mode
-            # |x|           = (batch_size, 1, hidden_size)
-            # |prev|        = (batch_size, t - 1, hidden_size)
+            # |x|           = (batch_size, 1, hidden_size) = Q 
+            # (현재 타입스템만 가져옴)
+            # |prev|        = (batch_size, t - 1, hidden_size) 
+            # (처음부터 바로 이전 타임스텝까지 싹다 모은 것)
             # |future_mask| = None
-            # |z|           = (batch_size, 1, hidden_size)
+            # |z|           = (batch_size, 1, hidden_size) 
+            # (결과값 또한 한 타임스텝만)
 
             # Post-LN:
             # z = self.masked_attn_norm(x + self.masked_attn_dropout(
@@ -258,13 +290,10 @@ class DecoderBlock(nn.Module):
 class MySequential(nn.Sequential):
 
     def forward(self, *x):
-        # nn.Sequential class does not provide multiple input arguments and returns.
-        # Thus, we need to define new class to solve this issue.
-        # Note that each block has same function interface.
-
+        # nn.Sequential 은 복수의 input을 전달할 수 없기 때문에
+        # 오버라이딩 하여, 복수의 input을 처리할 수 있도록 변경
         for module in self._modules.values():
             x = module(*x)
-
         return x
 
 
