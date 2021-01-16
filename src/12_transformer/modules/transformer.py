@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 import modules.data_loader as data_loader
-#from modules.search import SingleBeamSearchBoard
+from modules.search import SingleBeamSearchBoard
 
 
 class Attention(nn.Module):
@@ -345,13 +345,18 @@ class Transformer(nn.Module):
               ) for _ in range(n_dec_blocks)],
         )
         self.generator = nn.Sequential(
-            nn.LayerNorm(hidden_size), # Only for Pre-LN Transformer.
+            # Only for Pre-LN Transformer.
+            nn.LayerNorm(hidden_size), 
             nn.Linear(hidden_size, output_size),
             nn.LogSoftmax(dim=-1),
         )
 
     @torch.no_grad()
     def _generate_pos_enc(self, hidden_size, max_length):
+        '''
+        위치 정보에 상관없이 모든 타임스텝을 병렬적으로 학습하기 때문에,
+        디코더에 들어가기전, 각 문장의 위치 정보를 대입시키기 위함
+        '''
         enc = torch.FloatTensor(max_length, hidden_size).zero_()
         # |enc| = (max_length, hidden_size)
 
@@ -360,12 +365,18 @@ class Transformer(nn.Module):
         # |pos| = (max_length, 1)
         # |dim| = (1, hidden_size // 2)
 
+        # 이 부분을 잘 모르겠다???
         enc[:, 0::2] = torch.sin(pos / 1e+4**dim.div(float(hidden_size)))
         enc[:, 1::2] = torch.cos(pos / 1e+4**dim.div(float(hidden_size)))
 
         return enc
 
     def _position_encoding(self, x, init_pos=0):
+        '''
+        사전에 만들어진 pos_enc를 원하는 만큼 자르는 과정
+        학습 시에는, init_pos가 0으로 고정이지만,
+        추론 시에는, 하나씩 가져오며 수행
+        '''
         # |x| = (batch_size, n, hidden_size)
         # |self.pos_enc| = (max_length, hidden_size)
         assert x.size(-1) == self.pos_enc.size(-1)
@@ -379,19 +390,18 @@ class Transformer(nn.Module):
 
     @torch.no_grad()
     def _generate_mask(self, x, length):
+        '''
+        <PAD> 학습 미반영 처리를 위한 마스크 생성
+        '''
         mask = []
 
         max_length = max(length)
         for l in length:
             if max_length - l > 0:
-                # If the length is shorter than maximum length among samples,
-                # set last few values to be 1s to remove attention weight.
-                mask += [torch.cat([x.new_ones(1, l).zero_(),
-                                    x.new_ones(1, (max_length - l))
+                mask += [torch.cat([x.new_ones(1, l).zero_(), # 마스크 X
+                                    x.new_ones(1, (max_length - l)) # 마스크 O
                                     ], dim=-1)]
             else:
-                # If length of sample equals to maximum length among samples,
-                # set every value in mask to be 0.
                 mask += [x.new_ones(1, l).zero_()]
 
         mask = torch.cat(mask, dim=0).bool()
@@ -403,7 +413,12 @@ class Transformer(nn.Module):
         # |x[0]| = (batch_size, n)
         # |y|    = (batch_size, m)
 
-        # Mask to prevent having attention weight on padding position.
+        '''
+        인코더, 디코더에 대한 <PAD> 마스크 생성
+        어텐션시, 인코더 단의 결과 값에 <PAD> 부분을 무효화시키기 위함
+        mask_enc: 셀프 어텐션이므로 n * n
+        mask_dec: 디코더의 길이 만큼 늘려주기 위해 m * n
+        '''
         with torch.no_grad():
             mask = self._generate_mask(x[0], x[1])
             # |mask| = (batch_size, n)
@@ -418,8 +433,19 @@ class Transformer(nn.Module):
         z, _ = self.encoder(z, mask_enc)
         # |z| = (batch_size, n, hidden_size)
 
-        # Generate future mask
+        '''
+        디코더 한정으로 학습 중, 미래의 타임스텝을 가리기 위한 퓨처 마스크
+        디코더 쪽의 셀프 어텐션이므로 크기는 m * m
+        '''
         with torch.no_grad():
+            '''
+            # 역삼각형으로 마스킹된 텐서 생성
+            torch.triu: 역삼각 부분만 값을 살리고 나머지는 0으로 초기화
+            [0 1 1 1]
+            [0 0 1 1]
+            [0 0 0 1]
+            [0 0 0 0]
+            '''
             future_mask = torch.triu(x.new_ones((y.size(1), y.size(1))), diagonal=1).bool()
             # |future_mask| = (m, m)
             future_mask = future_mask.unsqueeze(0).expand(y.size(0), *future_mask.size())
@@ -513,151 +539,151 @@ class Transformer(nn.Module):
         return y_hats, indice
 
     #@profile
-    # def batch_beam_search(
-    #     self,
-    #     x,
-    #     beam_size=5,
-    #     max_length=255,
-    #     n_best=1,
-    #     length_penalty=.2,
-    # ):
-    #     # |x[0]| = (batch_size, n)
-    #     batch_size = x[0].size(0)
-    #     n_dec_layers = len(self.decoder._modules)
+    def batch_beam_search(
+        self,
+        x,
+        beam_size=5,
+        max_length=255,
+        n_best=1,
+        length_penalty=.2,
+    ):
+        # |x[0]| = (batch_size, n)
+        batch_size = x[0].size(0)
+        n_dec_layers = len(self.decoder._modules)
 
-    #     mask = self._generate_mask(x[0], x[1])
-    #     # |mask| = (batch_size, n)
-    #     x = x[0]
+        mask = self._generate_mask(x[0], x[1])
+        # |mask| = (batch_size, n)
+        x = x[0]
 
-    #     mask_enc = mask.unsqueeze(1).expand(mask.size(0), x.size(1), mask.size(-1))
-    #     mask_dec = mask.unsqueeze(1)
-    #     # |mask_enc| = (batch_size, n, n)
-    #     # |mask_dec| = (batch_size, 1, n)
+        mask_enc = mask.unsqueeze(1).expand(mask.size(0), x.size(1), mask.size(-1))
+        mask_dec = mask.unsqueeze(1)
+        # |mask_enc| = (batch_size, n, n)
+        # |mask_dec| = (batch_size, 1, n)
 
-    #     z = self.emb_dropout(self._position_encoding(self.emb_enc(x)))
-    #     z, _ = self.encoder(z, mask_enc)
-    #     # |z| = (batch_size, n, hidden_size)
+        z = self.emb_dropout(self._position_encoding(self.emb_enc(x)))
+        z, _ = self.encoder(z, mask_enc)
+        # |z| = (batch_size, n, hidden_size)
 
-    #     prev_status_config = {}
-    #     for layer_index in range(n_dec_layers + 1):
-    #         prev_status_config['prev_state_%d' % layer_index] = {
-    #             'init_status': None,
-    #             'batch_dim_index': 0,
-    #         }
-    #     # Example of prev_status_config:
-    #     # prev_status_config = {
-    #     #     'prev_state_0': {
-    #     #         'init_status': None,
-    #     #         'batch_dim_index': 0,
-    #     #     },
-    #     #     'prev_state_1': {
-    #     #         'init_status': None,
-    #     #         'batch_dim_index': 0,
-    #     #     },
-    #     #
-    #     #     ...
-    #     #
-    #     #     'prev_state_${n_layers}': {
-    #     #         'init_status': None,
-    #     #         'batch_dim_index': 0,
-    #     #     }
-    #     # }
+        prev_status_config = {}
+        for layer_index in range(n_dec_layers + 1):
+            prev_status_config['prev_state_%d' % layer_index] = {
+                'init_status': None,
+                'batch_dim_index': 0,
+            }
+        # Example of prev_status_config:
+        # prev_status_config = {
+        #     'prev_state_0': {
+        #         'init_status': None,
+        #         'batch_dim_index': 0,
+        #     },
+        #     'prev_state_1': {
+        #         'init_status': None,
+        #         'batch_dim_index': 0,
+        #     },
+        #
+        #     ...
+        #
+        #     'prev_state_${n_layers}': {
+        #         'init_status': None,
+        #         'batch_dim_index': 0,
+        #     }
+        # }
 
-    #     boards = [
-    #         SingleBeamSearchBoard(
-    #             z.device,
-    #             prev_status_config,
-    #             beam_size=beam_size,
-    #             max_length=max_length,
-    #         ) for _ in range(batch_size)
-    #     ]
-    #     done_cnt = [board.is_done() for board in boards]
+        boards = [
+            SingleBeamSearchBoard(
+                z.device,
+                prev_status_config,
+                beam_size=beam_size,
+                max_length=max_length,
+            ) for _ in range(batch_size)
+        ]
+        done_cnt = [board.is_done() for board in boards]
 
-    #     length = 0
-    #     while sum(done_cnt) < batch_size and length <= max_length:
-    #         fab_input, fab_z, fab_mask = [], [], []
-    #         fab_prevs = [[] for _ in range(n_dec_layers + 1)]
+        length = 0
+        while sum(done_cnt) < batch_size and length <= max_length:
+            fab_input, fab_z, fab_mask = [], [], []
+            fab_prevs = [[] for _ in range(n_dec_layers + 1)]
 
-    #         for i, board in enumerate(boards): # i == sample_index in minibatch
-    #             if board.is_done() == 0:
-    #                 y_hat_i, prev_status = board.get_batch()
+            for i, board in enumerate(boards): # i == sample_index in minibatch
+                if board.is_done() == 0:
+                    y_hat_i, prev_status = board.get_batch()
 
-    #                 fab_input += [y_hat_i                 ]
-    #                 fab_z     += [z[i].unsqueeze(0)       ] * beam_size
-    #                 fab_mask  += [mask_dec[i].unsqueeze(0)] * beam_size
+                    fab_input += [y_hat_i                 ]
+                    fab_z     += [z[i].unsqueeze(0)       ] * beam_size
+                    fab_mask  += [mask_dec[i].unsqueeze(0)] * beam_size
 
-    #                 for layer_index in range(n_dec_layers + 1):
-    #                     prev_i = prev_status['prev_state_%d' % layer_index]
-    #                     if prev_i is not None:
-    #                         fab_prevs[layer_index] += [prev_i]
-    #                     else:
-    #                         fab_prevs[layer_index] = None
+                    for layer_index in range(n_dec_layers + 1):
+                        prev_i = prev_status['prev_state_%d' % layer_index]
+                        if prev_i is not None:
+                            fab_prevs[layer_index] += [prev_i]
+                        else:
+                            fab_prevs[layer_index] = None
 
-    #         fab_input = torch.cat(fab_input, dim=0)
-    #         fab_z     = torch.cat(fab_z,     dim=0)
-    #         fab_mask  = torch.cat(fab_mask,  dim=0)
-    #         for i, fab_prev in enumerate(fab_prevs): # i == layer_index
-    #             if fab_prev is not None:
-    #                 fab_prevs[i] = torch.cat(fab_prev, dim=0)
-    #         # |fab_input|    = (current_batch_size, 1,)
-    #         # |fab_z|        = (current_batch_size, n, hidden_size)
-    #         # |fab_mask|     = (current_batch_size, 1, n)
-    #         # |fab_prevs[i]| = (current_batch_size, length, hidden_size)
-    #         # len(fab_prevs) = n_dec_layers + 1
+            fab_input = torch.cat(fab_input, dim=0)
+            fab_z     = torch.cat(fab_z,     dim=0)
+            fab_mask  = torch.cat(fab_mask,  dim=0)
+            for i, fab_prev in enumerate(fab_prevs): # i == layer_index
+                if fab_prev is not None:
+                    fab_prevs[i] = torch.cat(fab_prev, dim=0)
+            # |fab_input|    = (current_batch_size, 1,)
+            # |fab_z|        = (current_batch_size, n, hidden_size)
+            # |fab_mask|     = (current_batch_size, 1, n)
+            # |fab_prevs[i]| = (current_batch_size, length, hidden_size)
+            # len(fab_prevs) = n_dec_layers + 1
 
-    #         # Unlike training procedure,
-    #         # take the last time-step's output during the inference.
-    #         h_t = self.emb_dropout(
-    #             self._position_encoding(self.emb_dec(fab_input), init_pos=length)
-    #         )
-    #         # |h_t| = (current_batch_size, 1, hidden_size)
-    #         if fab_prevs[0] is None:
-    #             fab_prevs[0] = h_t
-    #         else:
-    #             fab_prevs[0] = torch.cat([fab_prevs[0], h_t], dim=1)
+            # Unlike training procedure,
+            # take the last time-step's output during the inference.
+            h_t = self.emb_dropout(
+                self._position_encoding(self.emb_dec(fab_input), init_pos=length)
+            )
+            # |h_t| = (current_batch_size, 1, hidden_size)
+            if fab_prevs[0] is None:
+                fab_prevs[0] = h_t
+            else:
+                fab_prevs[0] = torch.cat([fab_prevs[0], h_t], dim=1)
 
-    #         for layer_index, block in enumerate(self.decoder._modules.values()):
-    #             prev = fab_prevs[layer_index]
-    #             # |prev| = (current_batch_size, m, hidden_size)
+            for layer_index, block in enumerate(self.decoder._modules.values()):
+                prev = fab_prevs[layer_index]
+                # |prev| = (current_batch_size, m, hidden_size)
 
-    #             h_t, _, _, _, _ = block(h_t, fab_z, fab_mask, prev, None)
-    #             # |h_t| = (current_batch_size, 1, hidden_size)
+                h_t, _, _, _, _ = block(h_t, fab_z, fab_mask, prev, None)
+                # |h_t| = (current_batch_size, 1, hidden_size)
 
-    #             if fab_prevs[layer_index + 1] is None:
-    #                 fab_prevs[layer_index + 1] = h_t
-    #             else:
-    #                 fab_prevs[layer_index + 1] = torch.cat(
-    #                     [fab_prevs[layer_index + 1], h_t],
-    #                     dim=1,
-    #                 ) # Append new hidden state for each layer.
+                if fab_prevs[layer_index + 1] is None:
+                    fab_prevs[layer_index + 1] = h_t
+                else:
+                    fab_prevs[layer_index + 1] = torch.cat(
+                        [fab_prevs[layer_index + 1], h_t],
+                        dim=1,
+                    ) # Append new hidden state for each layer.
 
-    #         y_hat_t = self.generator(h_t)
-    #         # |y_hat_t| = (batch_size, 1, output_size)
+            y_hat_t = self.generator(h_t)
+            # |y_hat_t| = (batch_size, 1, output_size)
 
-    #         # |fab_prevs[i][begin:end]| = (beam_size, length, hidden_size)
-    #         cnt = 0
-    #         for board in boards:
-    #             if board.is_done() == 0:
-    #                 begin = cnt * beam_size
-    #                 end = begin + beam_size
+            # |fab_prevs[i][begin:end]| = (beam_size, length, hidden_size)
+            cnt = 0
+            for board in boards:
+                if board.is_done() == 0:
+                    begin = cnt * beam_size
+                    end = begin + beam_size
 
-    #                 prev_status = {}
-    #                 for layer_index in range(n_dec_layers + 1):
-    #                     prev_status['prev_state_%d' % layer_index] = fab_prevs[layer_index][begin:end]
+                    prev_status = {}
+                    for layer_index in range(n_dec_layers + 1):
+                        prev_status['prev_state_%d' % layer_index] = fab_prevs[layer_index][begin:end]
 
-    #                 board.collect_result(y_hat_t[begin:end], prev_status)
+                    board.collect_result(y_hat_t[begin:end], prev_status)
 
-    #                 cnt += 1
+                    cnt += 1
 
-    #         done_cnt = [board.is_done() for board in boards]
-    #         length += 1
+            done_cnt = [board.is_done() for board in boards]
+            length += 1
 
-    #     batch_sentences, batch_probs = [], []
+        batch_sentences, batch_probs = [], []
 
-    #     for i, board in enumerate(boards):
-    #         sentences, probs = board.get_n_best(n_best, length_penalty=length_penalty)
+        for i, board in enumerate(boards):
+            sentences, probs = board.get_n_best(n_best, length_penalty=length_penalty)
 
-    #         batch_sentences += [sentences]
-    #         batch_probs     += [probs]
+            batch_sentences += [sentences]
+            batch_probs     += [probs]
 
-    #     return batch_sentences, batch_probs
+        return batch_sentences, batch_probs
