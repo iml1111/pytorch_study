@@ -51,7 +51,7 @@ def define_argparser(is_continue=False):
     p.add_argument(
         '--batch_size',
         type=int,
-        default=256,
+        default=128,
         help='Mini batch size for gradient descent. Default=%(default)s'
     )
     p.add_argument(
@@ -107,7 +107,7 @@ def define_argparser(is_continue=False):
     p.add_argument(
         '--iteration_per_update',
         type=int,
-        default=16,
+        default=32,
         help='Number of feed-forward iterations for one parameter update. Default=%(default)s'
     )
     p.add_argument(
