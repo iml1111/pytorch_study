@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 import modules.data_loader as data_loader
-
+from modules.search import SingleBeamSearchBoard
 
 class Encoder(nn.Module):
 
@@ -405,3 +405,159 @@ class Seq2Seq(nn.Module):
         indice = torch.cat(indice, dim=1)
 
         return y_hats, indice
+
+    def batch_beam_search(
+        self,
+        src,
+        beam_size=5,
+        max_length=255,
+        n_best=1,
+        length_penalty=.2
+    ):
+        mask, x_length = None, None
+
+        if isinstance(src, tuple):
+            x, x_length = src
+            mask = self.generate_mask(x, x_length)
+            # |mask| = (batch_size, length)
+        else:
+            x = src
+        batch_size = x.size(0)
+
+        emb_src = self.emb_src(x)
+        h_src, h_0_tgt = self.encoder((emb_src, x_length))
+        # |h_src| = (batch_size, length, hidden_size)
+        h_0_tgt = self.merge_encoder_hiddens(h_0_tgt)
+
+        '''
+        initialize 'SingleBeamSearchBoard'
+        각 배치별로, beam_size만큼 페이크 배치를 생성해주는 클래스 초기화
+        hidden_state: 인코더에서 넘어온 히든 스테이트
+        cell_state: 인코더에서 넘어온 셀 스테이트
+        h_t_1_tilde: 이전 스텝의 예측값(input feeding), 
+        처음에는 없으므로 None
+        '''
+        boards = [SingleBeamSearchBoard(
+            h_src.device,
+            {
+                'hidden_state': {
+                    'init_status': h_0_tgt[0][:, i, :].unsqueeze(1),
+                    'batch_dim_index': 1,
+                }, # |hidden_state| = (n_layers, batch_size, hidden_size)
+                'cell_state': {
+                    'init_status': h_0_tgt[1][:, i, :].unsqueeze(1),
+                    'batch_dim_index': 1,
+                }, # |cell_state| = (n_layers, batch_size, hidden_size)
+                'h_t_1_tilde': {
+                    'init_status': None,
+                    'batch_dim_index': 0,
+                }, # |h_t_1_tilde| = (batch_size, 1, hidden_size)
+            },
+            beam_size=beam_size,
+            max_length=max_length,
+        ) for i in range(batch_size)]
+        # 각 보드(batch)들이 예측이 끝났는지 여부
+        # 처음에는 당연히 전부 0으로 이루어짐
+        is_done = [board.is_done() for board in boards]
+
+        length = 0
+        # is_done의 합이 Batch_size를 넘을때까지 반복
+        while sum(is_done) < batch_size and length <= max_length:
+            # current_batch_size = sum(is_done) * beam_size
+
+            # Initialize fabricated variables.
+            # As far as batch-beam-search is running, 
+            # temporary batch-size for fabricated mini-batch is 
+            # 'beam_size'-times bigger than original batch_size.
+            fab_input, fab_hidden, fab_cell, fab_h_t_tilde = [], [], [], []
+            fab_h_src, fab_mask = [], []
+            
+            # 각 input들을 beam_size 만큼 늘려서 가짜 batch_size 생성
+            # input, hidden, cell, h_t_tilde는 이미 보드에서 늘려진 상태
+            # h_src, mask만 그대로 expand 해주면 됨
+            for i, board in enumerate(boards):
+                # Batchify if the inference for the sample is still not finished.
+                if board.is_done() == 0:
+                    # 여기서 현재 타임스텝에 필요한 가짜 batch 데이터 반환
+                    y_hat_i, prev_status = board.get_batch()
+                    hidden_i    = prev_status['hidden_state']
+                    cell_i      = prev_status['cell_state']
+                    h_t_tilde_i = prev_status['h_t_1_tilde']
+
+                    fab_input  += [y_hat_i]
+                    fab_hidden += [hidden_i]
+                    fab_cell   += [cell_i]
+                    fab_h_src  += [h_src[i, :, :]] * beam_size
+                    fab_mask   += [mask[i, :]] * beam_size
+                    if h_t_tilde_i is not None:
+                        fab_h_t_tilde += [h_t_tilde_i]
+                    else:
+                        fab_h_t_tilde = None
+
+            fab_input  = torch.cat(fab_input,  dim=0)
+            fab_hidden = torch.cat(fab_hidden, dim=1)
+            fab_cell   = torch.cat(fab_cell,   dim=1)
+            fab_h_src  = torch.stack(fab_h_src)
+            fab_mask   = torch.stack(fab_mask)
+            if fab_h_t_tilde is not None:
+                fab_h_t_tilde = torch.cat(fab_h_t_tilde, dim=0)
+            # |fab_input|     = (current_batch_size, 1)
+            # |fab_hidden|    = (n_layers, current_batch_size, hidden_size)
+            # |fab_cell|      = (n_layers, current_batch_size, hidden_size)
+            # |fab_h_src|     = (current_batch_size, length, hidden_size)
+            # |fab_mask|      = (current_batch_size, length)
+            # |fab_h_t_tilde| = (current_batch_size, 1, hidden_size)
+
+            emb_t = self.emb_dec(fab_input)
+            # |emb_t| = (current_batch_size, 1, word_vec_size)
+
+            fab_decoder_output, (fab_hidden, fab_cell) = self.decoder(emb_t,
+                                                                      fab_h_t_tilde,
+                                                                      (fab_hidden, fab_cell))
+            # |fab_decoder_output| = (current_batch_size, 1, hidden_size)
+            context_vector = self.attn(fab_h_src, fab_decoder_output, fab_mask)
+            # |context_vector| = (current_batch_size, 1, hidden_size)
+            fab_h_t_tilde = self.tanh(self.concat(torch.cat([fab_decoder_output,
+                                                             context_vector
+                                                             ], dim=-1)))
+            # |fab_h_t_tilde| = (current_batch_size, 1, hidden_size)
+            y_hat = self.generator(fab_h_t_tilde)
+            # |y_hat| = (current_batch_size, 1, output_size)
+
+            # 디코더에서는 그대로 한 batch인듯이 병렬연산을 해준뒤,
+            # 각 board에 다시 beam_size만큼 찢어서 보내줌
+            # fab_hidden[:, begin:end, :] = (n_layers, beam_size, hidden_size)
+            # fab_cell[:, begin:end, :]   = (n_layers, beam_size, hidden_size)
+            # fab_h_t_tilde[begin:end]    = (beam_size, 1, hidden_size)
+            cnt = 0
+            for board in boards:
+                if board.is_done() == 0:
+                    # Decide a range of each sample.
+                    begin = cnt * beam_size
+                    end = begin + beam_size
+
+                    # pick k-best results for each sample.
+                    board.collect_result(
+                        y_hat[begin:end],
+                        {
+                            'hidden_state': fab_hidden[:, begin:end, :],
+                            'cell_state'  : fab_cell[:, begin:end, :],
+                            'h_t_1_tilde' : fab_h_t_tilde[begin:end],
+                        },
+                    )
+                    cnt += 1
+
+            is_done = [board.is_done() for board in boards]
+            length += 1
+
+        # pick n-best hypothesis.
+        batch_sentences, batch_probs = [], []
+
+        # Collect the results.
+        for i, board in enumerate(boards):
+            sentences, probs = board.get_n_best(n_best, length_penalty=length_penalty)
+
+            batch_sentences += [sentences]
+            batch_probs     += [probs]
+
+        return batch_sentences, batch_probs
