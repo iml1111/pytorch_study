@@ -1,6 +1,10 @@
 #-*- coding:utf-8 -*-
 import sys
-sys.stdin.reconfigure(encoding='utf-8')
+
+try:
+	sys.stdin.reconfigure(encoding='utf-8')
+except:
+	pass
 
 
 if __name__ == "__main__":
