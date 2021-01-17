@@ -26,10 +26,12 @@ class SingleBeamSearchBoard():
         # 처음에는 모두 <BOS>므로 초기화
         self.word_indice = [torch.LongTensor(beam_size).zero_().to(self.device) + data_loader.BOS]
         # 각 타임 스텝의 Word들이 선정된 Beam Index
+        # 현재 word_indice들의 단어가 각각 어느 Beam에서 선정되었는지 체크
         # 처음에는 아무것도 선정되지 않았기에 -1로 초기화
         self.beam_indice = [torch.LongTensor(beam_size).zero_().to(self.device) - 1]
         # 각 Beam들의 누적 확률 값
-        # 처음에는 [0, -inf, -inf, ...]로 초기화
+        # 처음에는 모두 BOS 이므로 모든 빔의 결과가 같을 것임.
+        # 따라서 첫 번째 빔만 선정하게 하기 위해 [0, -inf, -inf, ...]로 초기화
         self.cumulative_probs = [torch.FloatTensor([.0] + [-float('inf')] * (beam_size - 1)).to(self.device)]
         # 각 빔이 현재 EOS에 도달했는지 여부
         # 1 if it is done else 0
@@ -123,7 +125,7 @@ class SingleBeamSearchBoard():
         cumulative_prob = y_hat + cumulative_prob.view(-1, 1, 1).expand(self.beam_size, 1, output_size)
         # |cumulative_prob| = (beam_size, 1, output_size)
 
-        # cumulative_prob를 (beam_size * output_size,)로 
+        # cumulative_prob를 (output_size * beam_size,)로 
         # flatten 해준후 확률이 높은 순으로 정렬
         # top_indice에는 원래 정렬되기전 index가 유지됨
         top_log_prob, top_indice = cumulative_prob.view(-1).sort(descending=True)
@@ -164,7 +166,7 @@ class SingleBeamSearchBoard():
     def get_n_best(self, n=1, length_penalty=.2):
         '''
         이때까지의 Beam Board를 찾아보며,
-        가장 확률 값이 높았던 N개의 문장 추출
+        가장 누적 확률 값이 높았던 N개의 문장 추출
         '''
         sentences, probs, founds = [], [], []
         

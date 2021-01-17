@@ -472,39 +472,72 @@ class Transformer(nn.Module):
         mask_dec = mask.unsqueeze(1)
         # |mask_enc| = (batch_size, n, n)
         # |mask_dec| = (batch_size, 1, n)
+        # 학습때는 모든 타임스텝을 한번에 보내서 (bs, m, n)이지만
+        # 추론시에는 다음 단어를 미리 모르므로, (bs, 1, n)
+        # 그냥 이 디코더 마스크를 계속 재활용해서 사용함
 
         z = self.emb_dropout(self._position_encoding(self.emb_enc(x)))
         z, _ = self.encoder(z, mask_enc)
         # |z| = (batch_size, n, hidden_size)
 
-        # Fill a vector, which has 'batch_size' dimension, with BOS value.
+        # 각 배치마다 현재 타입스텝 예측 단어를 저장하는 공간 
+        # 처음에는 (batch_size, 1)로 전부 BOS로 채워져있음
         y_t_1 = x.new(batch_size, 1).zero_() + data_loader.BOS
         # |y_t_1| = (batch_size, 1)
+         
+        # 현재 각 배치가 디코딩이 진행중인 것인지 True or False
+        # 합쳐서 1이상이면 최소 한개라도 진행중이므로 속행하게 됨
         is_decoding = x.new_ones(batch_size, 1).bool()
 
+        '''
+        # seq2seq는 이전 맨 마지막 hidden state만 갖고 있었으면 되었는데
+        # transformer는 어텐션을 때리기 위해,
+        # 각 계층마다 모든 타임스텝의 hidden_state를 참고해야 함
+        # 따라서 처음에 decorder의 계층 수 + 1 (입력단 포함)의 None으로 가득찬 리스트 생성
+        # prevs: 각 계층마다 hidden 값을 저장하기 위한 공간
+        prev:
+            [
+               1계층:  (batch_size, 1 -> N, hidden_size),
+               2계층: (batch_size, 1 -> N, hidden_size),
+               3계층: (batch_size, 1 -> N, hidden_size),
+               ...
+            ]
+        첫 번째 타임스텝의 (1, 2, 3) 계층을 돌면서 prev를 박고...
+        두 번째 타임스텝의 (1, 2, 3) 계층을 돌면서 prev를 박고...
+        '''
         prevs = [None for _ in range(len(self.decoder._modules) + 1)]
         y_hats, indice = [], []
-        # Repeat a loop while sum of 'is_decoding' flag is bigger than 0,
-        # or current time-step is smaller than maximum length.
+
         while is_decoding.sum() > 0 and len(indice) < max_length:
-            # Unlike training procedure,
-            # take the last time-step's output during the inference.
+            # 각 배치의 한 타임스텝에 대한 히든 사이즈
             h_t = self.emb_dropout(
                 self._position_encoding(self.emb_dec(y_t_1), init_pos=len(indice))
             )
             # |h_t| = (batch_size, 1, hidden_size))
+
+            # 맨 처음은 예외처리로써, 첫 계층 prev([0]) 정보들은
+            # 디코더에 들어가기 전에 처리후, 저장해줌
+            # 왜냐하면 디코더를 들어가야 하기 때문
             if prevs[0] is None:
+                # None일 경우(초기상태), 그대로 바꿔주고
                 prevs[0] = h_t
             else:
+                # 유효한 텐서값일 경우, 해당 텐서 밑에 그대로 붙여줌
                 prevs[0] = torch.cat([prevs[0], h_t], dim=1)
 
+            # Decoder Block를 하나하나 뽑아서 반복문 수행
             for layer_index, block in enumerate(self.decoder._modules.values()):
+                # 현재 계층의 prev_status만 가져옴
                 prev = prevs[layer_index]
                 # |prev| = (batch_size, len(y_hats), hidden_size)
 
+                # 맨 처음 들어갈때는, 이전 타임스텝이 없음
+                # 그래서 prevs[0]도 h_t가 들어 있음(h_t == prev)
+                # 즉 규격에 맞춰주기 위해서 prev를 넣어준 셈(결국 완전 셀프 어텐션)
                 h_t, _, _, _, _ = block(h_t, z, mask_dec, prev, None)
                 # |h_t| = (batch_size, 1, hidden_size)
 
+                # 이번에 나온 결과(h_t)를 다음 계층의 Prev로써 쓸 수 있도록 가져옴
                 if prevs[layer_index + 1] is None:
                     prevs[layer_index + 1] = h_t
                 else:
@@ -520,6 +553,8 @@ class Transformer(nn.Module):
             else: # Random sampling                
                 y_t_1 = torch.multinomial(y_hat_t.exp().view(x.size(0), -1), 1)
             # Put PAD if the sample is done.
+            # is_decoding이 False인 곳, 즉 EOS로 문장이 끝난 곳은
+            # y_t_1에 <PAD>를 덮어씌워줌
             y_t_1 = y_t_1.masked_fill_(
                 ~is_decoding,
                 data_loader.PAD,
@@ -534,8 +569,9 @@ class Transformer(nn.Module):
         y_hats = torch.cat(y_hats, dim=1)
         indice = torch.cat(indice, dim=-1)
         # |y_hats| = (batch_size, m, output_size)
+        # 각 단어의 확률 값
         # |indice| = (batch_size, m)
-
+        # 확률값을 토대로 구한 최종 단어 인덱스 모음
         return y_hats, indice
 
     #@profile
@@ -628,7 +664,7 @@ class Transformer(nn.Module):
             # |fab_input|    = (current_batch_size, 1,)
             # |fab_z|        = (current_batch_size, n, hidden_size)
             # |fab_mask|     = (current_batch_size, 1, n)
-            # |fab_prevs[i]| = (current_batch_size, length, hidden_size)
+            # |fab_prevs[i]| = (cur rent_batch_size, length, hidden_size)
             # len(fab_prevs) = n_dec_layers + 1
 
             # Unlike training procedure,
