@@ -5,7 +5,7 @@ from operator import itemgetter
 import torch
 from modules.data_loader import DataLoader
 import modules.data_loader as data_loader
-from modules.seq2seq import Seq2Seq
+from modules.transformer import Transformer
 
 
 def define_argparser():
@@ -108,14 +108,15 @@ def get_vocabs(train_config, config, saved_data):
 
 
 def get_model(input_size, output_size, train_config):
-    model = Seq2Seq(
-        input_size,
-        train_config.word_vec_size,
-        train_config.hidden_size,
-        output_size,
-        n_layers=train_config.n_layers,
-        dropout_p=train_config.dropout,
-    )
+    model = Transformer(
+            input_size,
+            train_config.hidden_size,
+            output_size,
+            n_splits=train_config.n_splits,
+            n_enc_blocks=train_config.n_layers,
+            n_dec_blocks=train_config.n_layers,
+            dropout_p=train_config.dropout,
+        )
     model.load_state_dict(saved_data['model'])
     model.eval() 
     return model
