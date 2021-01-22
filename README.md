@@ -18,7 +18,9 @@
 10. text_classification
 12. Seq2Seq
 13. Transformer
+
 Appendix-1. LDA
+
 Appendix-2. Word2Vec
 
 
