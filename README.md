@@ -142,11 +142,17 @@ https://www.aihub.or.kr/aidata/87
 
 Model에는 **Tearch Forcing으로 인하여 학습(foward)과 추론(search) 함수가 존재**하며, 추론시 성능 향상을 도울 수 있는 **Beam Search**까지 구현되어 있습니다.
 
+그 밖에 Trainer에는 **Gradient Accumulation** 및 **Gradient Clipping**이 구현이 되어 있습니다.
+
 
 
 ## Transformer
 
+트랜스포머 모델을 이용하여 기계 번역기를 구현한 코드입니다.
 
+학습된 데이터를 포함하여, 모델의 Input Output까지 위의 Seq2Seq와 구조가 일치하기 때문에 신경망을 제외한 대부분의 코드가 일치합니다.
+
+단, 기존 Paper 방식인 Post-LN 방식의 경우, 하이퍼 파라미터 튜닝에 까다로운 점이 있기 때문에 **Pre-LN을 기반하여 구현**하였습니다.
 
 
 
