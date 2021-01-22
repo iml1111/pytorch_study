@@ -16,7 +16,10 @@
 8. preprocessing
 9. word_embedding
 10. text_classification
-11. Word2vec
+12. Seq2Seq
+13. Transformer
+Appendix-1. LDA
+Appendix-2. Word2Vec
 
 
 # References
