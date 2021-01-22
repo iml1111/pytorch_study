@@ -24,9 +24,13 @@ Appendix-1. LDA
 Appendix-2. Word2Vec
 
 
+
+
 # References
 
 https://github.com/kh-kim/nlp_with_pytorch_examples
+
+https://github.com/kh-kim/simple-nmt
 
 [PyTorch - Word Embedding](https://www.tutorialspoint.com/pytorch/pytorch_word_embedding.htm)
 
