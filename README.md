@@ -93,11 +93,58 @@ Mnist를 RNN을 사용하여 구현한 코드입니다.
 
 ## Preprocessing
 
-해당 챕터는 모델 학습 관련 코드가 아닙니다. 자연어처리에서 데이터 전처리시에 사용되는, Tokenize, Regular Expression, Subword Segmentation 등에 대하여 다룹니다.
+해당 챕터는 모델 학습 관련 코드가 아닙니다. 자연어처리에서 데이터 전처리시에 사용되는**, Tokenize, Regular Expression, Subword Segmentation** 등에 대하여 다룹니다.
 
-또한, torchtext에 제공하는 Dataset 기능을 사용해보았습니다.
+또한, **torchtext**에 제공하는 Dataset 기능을 사용해보았습니다.
 
 
+
+## Word Embedding
+
+Word Embedding 실습을 위해, Facebook의 FastText를 통해 임베딩 벡터를 구하는 실습입니다.
+
+(FastText의 경우, Gensim 라이브러리를 통해서 Python 단에서 학습시킬 수 있습니다) 
+
+
+
+## Text Classification
+
+**영화 리뷰 데이터를 기반으로 감정 분석 (긍정/부정)을 수행하는 Text Classification 학습 코드**입니다.
+
+Dataset인 영화 리뷰 데이터의 경우, 저작권 문제로 올리지 않았습니다.
+
+(Dataset 규격은 TSV로 각 라인당, 아래와 같이 구성되어 있습니다.)
+
+```sh
+# label: 1 or 0
+# text: 영화 리뷰 텍스트
+<label>\t<text>
+<label>\t<text>
+<label>\t<text>
+...
+```
+
+전이 학습을 사용하지 않을 경우, 사용 가능한 모델은 위에서 실습했던 **CNN, RNN**입니다.
+
+전이 학습을 사용할 경우, BERT를 이용한 finetuning이 가능합니다.
+
+default로 사용된 BERT 모델은 **"beomi/kcbert-base"** 입니다.
+
+
+
+## Seq2Seq
+
+시퀀스 투 시퀀스 모델을 이용하여 기계 번역기를 구현한 코드입니다.
+
+학습에 사용된 Dataset은 AI-HUB에서 제공된 Open Data를 사용하였습니다.
+
+https://www.aihub.or.kr/aidata/87
+
+Model에는 **Tearch Forcing으로 인하여 학습(foward)과 추론(search) 함수가 존재**하며, 추론시 성능 향상을 도울 수 있는 **Beam Search**까지 구현되어 있습니다.
+
+
+
+## Transformer
 
 
 
